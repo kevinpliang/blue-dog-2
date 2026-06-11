@@ -8,6 +8,7 @@ const MIN_CONSECUTIVE_WALL_ROW_SPACING := 8.0
 
 
 static func all_patterns() -> Array[Dictionary]:
+	# Add patterns with _pattern(id, tier, rows); row offsets are meters, lanes are 0-2, and types are GROUND, OVERHEAD, or WALL.
 	return [
 		_pattern("single_ground_left", 0, [_row(0.0, [_obstacle(0, GROUND)])]),
 		_pattern("single_ground_center", 0, [_row(0.0, [_obstacle(1, GROUND)])]),
