@@ -9,6 +9,7 @@ const TUNING = preload("res://game/default_runner_tuning.tres")
 const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader")
 const SAVE_PATH := "user://dog_run.cfg"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
+const OBSTACLE_OPACITY := 0.4
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
@@ -69,7 +70,7 @@ func _process(delta: float) -> void:
 		])
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed:
 			_pointer_start = event.position
@@ -408,13 +409,13 @@ func _configure_obstacle(mesh_instance: MeshInstance3D, obstacle_type: int) -> v
 	match obstacle_type:
 		Simulation.ObstacleType.GROUND_BLOCK:
 			box.size = Vector3(1.65, 1.55, 1.1)
-			mesh_instance.material_override = _make_material(Color(1.0, 0.38, 0.08), true, 0.88)
+			mesh_instance.material_override = _make_material(Color(1.0, 0.38, 0.08), true, OBSTACLE_OPACITY)
 		Simulation.ObstacleType.OVERHEAD_BAR:
 			box.size = Vector3(1.9, 0.5, 1.1)
-			mesh_instance.material_override = _make_material(Color(0.85, 0.15, 1.0), true, 0.88)
+			mesh_instance.material_override = _make_material(Color(0.85, 0.15, 1.0), true, OBSTACLE_OPACITY)
 		Simulation.ObstacleType.WALL:
 			box.size = Vector3(1.9, 3.2, 0.85)
-			mesh_instance.material_override = _make_material(Color(1.0, 0.08, 0.38), true, 0.88)
+			mesh_instance.material_override = _make_material(Color(1.0, 0.08, 0.38), true, OBSTACLE_OPACITY)
 	mesh_instance.mesh = box
 	mesh_instance.set_meta("obstacle_type", obstacle_type)
 
