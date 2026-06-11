@@ -4,10 +4,3 @@
 
 [resource]
 script = ExtResource("1_tuning")
-lane_lean_max_degrees = 12.0
-lane_lean_smoothing = 12.0
-jump_stretch_horizontal = 0.88
-jump_stretch_vertical = 1.15
-landing_squash_horizontal = 1.12
-landing_squash_vertical = 0.82
-landing_pulse_duration = 0.16

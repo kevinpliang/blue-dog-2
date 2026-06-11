@@ -8,11 +8,15 @@ const MIN_CONSECUTIVE_WALL_ROW_SPACING := 8.0
 
 
 static func all_patterns() -> Array[Dictionary]:
-	# Add patterns with _pattern(id, tier, rows); row offsets are meters, lanes are 0-2, and types are GROUND, OVERHEAD, or WALL.
+	# Add patterns with _pattern(id, tier, rows):
+	# - id: unique descriptive name stored on spawned obstacles.
+	# - tier: difficulty level when the pattern unlocks (0 = start, 1 = 250m, 2 = 650m).
+	# - rows: ordered obstacle groups built with _row(offset, obstacles).
+	# - offset: meters after the pattern's first row; offsets must increase.
+	# - obstacles: entries built with _obstacle(lane, type).
+	# - lane: 0 = left, 1 = center, 2 = right.
+	# - type: GROUND requires jumping, OVERHEAD requires ducking, and WALL requires changing lanes.
 	return [
-		_pattern("single_ground_left", 0, [_row(0.0, [_obstacle(0, GROUND)])]),
-		_pattern("single_ground_center", 0, [_row(0.0, [_obstacle(1, GROUND)])]),
-		_pattern("single_overhead_right", 0, [_row(0.0, [_obstacle(2, OVERHEAD)])]),
 		_pattern("single_wall_center", 0, [_row(0.0, [_obstacle(1, WALL)])]),
 		_pattern("jump_left_center", 0, [_row(0.0, [_obstacle(0, GROUND), _obstacle(1, GROUND)])]),
 		_pattern("jump_center_right", 0, [_row(0.0, [_obstacle(1, GROUND), _obstacle(2, GROUND)])]),
