@@ -305,7 +305,7 @@ func _build_hud() -> void:
 	_new_high_score_label.name = "NewHighScoreLabel"
 	_new_high_score_label.text = "NEW HIGH SCORE"
 	_new_high_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_style_label(_new_high_score_label, 32)
+	_style_label(_new_high_score_label, 38)
 	_new_high_score_label.add_theme_color_override("font_color", Color(0.0, 0.85, 1.0))
 	_run_summary.add_child(_new_high_score_label)
 
@@ -313,15 +313,21 @@ func _build_hud() -> void:
 	game_over_label.name = "GameOverLabel"
 	game_over_label.text = "GAME OVER"
 	game_over_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_style_label(game_over_label, 38)
+	_style_label(game_over_label, 44)
 	_run_summary.add_child(game_over_label)
+
+	var summary_margin := MarginContainer.new()
+	summary_margin.name = "RunSummaryMargin"
+	summary_margin.add_theme_constant_override("margin_left", 48)
+	summary_margin.add_theme_constant_override("margin_right", 48)
+	_run_summary.add_child(summary_margin)
 
 	var summary_grid := GridContainer.new()
 	summary_grid.name = "RunSummaryGrid"
 	summary_grid.columns = 2
-	summary_grid.add_theme_constant_override("h_separation", 36)
-	summary_grid.add_theme_constant_override("v_separation", 10)
-	_run_summary.add_child(summary_grid)
+	summary_grid.add_theme_constant_override("h_separation", 48)
+	summary_grid.add_theme_constant_override("v_separation", 14)
+	summary_margin.add_child(summary_grid)
 	_add_summary_row(summary_grid, "distance", "DISTANCE")
 	_add_summary_row(summary_grid, "peak_multiplier", "PEAK MULTIPLIER")
 	_add_summary_row(summary_grid, "near_misses", "NEAR MISSES")
@@ -332,7 +338,7 @@ func _build_hud() -> void:
 	restart_label.name = "RestartLabel"
 	restart_label.text = "Tap to Restart"
 	restart_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_style_label(restart_label, 24)
+	_style_label(restart_label, 28)
 	_run_summary.add_child(restart_label)
 
 func _style_label(label: Label, font_size: int) -> void:
@@ -348,14 +354,14 @@ func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> v
 	var title := Label.new()
 	title.text = title_text
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_label(title, 22)
+	_style_label(title, 28)
 	grid.add_child(title)
 
 	var value := Label.new()
 	value.name = "Summary%sValue" % key.to_pascal_case()
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_label(value, 22)
+	_style_label(value, 28)
 	grid.add_child(value)
 	_run_summary_values[key] = value
 
