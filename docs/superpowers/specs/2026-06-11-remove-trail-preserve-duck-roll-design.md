@@ -17,4 +17,3 @@ Remove the player speed trail and keep the textured sphere's roll continuous whi
 - The active scene contains no `PlayerSpeedTrail`.
 - Particle and tuning regressions confirm all trail configuration is removed.
 - A smoke regression ducks during a run and confirms the roll angle advances and the mesh basis matches it.
-

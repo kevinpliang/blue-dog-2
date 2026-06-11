@@ -5,4 +5,3 @@
 3. Remove trail code and tuning, then replace incremental mesh rotation with explicit roll-angle state.
 4. Run the complete automated suite and a portrait render check.
 5. Commit and push the verified change.
-
