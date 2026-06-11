@@ -13,6 +13,10 @@ static func all_patterns() -> Array[Dictionary]:
 		_pattern("single_ground_center", 0, [_row(0.0, [_obstacle(1, GROUND)])]),
 		_pattern("single_overhead_right", 0, [_row(0.0, [_obstacle(2, OVERHEAD)])]),
 		_pattern("single_wall_center", 0, [_row(0.0, [_obstacle(1, WALL)])]),
+		_pattern("jump_left_center", 0, [_row(0.0, [_obstacle(0, GROUND), _obstacle(1, GROUND)])]),
+		_pattern("jump_center_right", 0, [_row(0.0, [_obstacle(1, GROUND), _obstacle(2, GROUND)])]),
+		_pattern("duck_left_center", 0, [_row(0.0, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD)])]),
+		_pattern("duck_center_right", 0, [_row(0.0, [_obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)])]),
 		_pattern("choose_left_then_center", 1, [
 			_row(0.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
 			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
