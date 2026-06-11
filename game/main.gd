@@ -8,9 +8,12 @@ const LimitsScript = preload("res://game/runtime_limits.gd")
 const TUNING = preload("res://game/default_runner_tuning.tres")
 const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader")
 const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
+const PLAYER_TEXTURE = preload("res://assets/player/white.png")
 const SAVE_PATH := "user://dog_run.cfg"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
 const OBSTACLE_OPACITY := 0.4
+const PLAYER_TEXTURE_UV_SCALE := Vector3(4.0, 1.0, 1.0)
+const PLAYER_TEXTURE_UV_OFFSET := Vector3(-1.5, 0.0, 0.0)
 const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
 
@@ -191,8 +194,9 @@ func _build_world() -> void:
 	sphere.radial_segments = 20
 	sphere.rings = 12
 	_player.mesh = sphere
-	_player.material_override = _make_material(Color.WHITE)
+	_player.material_override = _make_player_material()
 	_player.position = Vector3(0.0, 0.75, TUNING.visual_action_plane_z)
+	_player.rotation.y = PI
 	add_child(_player)
 
 	_player_light = OmniLight3D.new()
@@ -344,6 +348,15 @@ func _make_material(color: Color, emission := false, opacity := 1.0) -> Standard
 		material.emission_enabled = true
 		material.emission = color
 		material.emission_energy_multiplier = 1.4
+	return material
+
+
+func _make_player_material() -> StandardMaterial3D:
+	var material := _make_material(Color.WHITE)
+	material.albedo_texture = PLAYER_TEXTURE
+	material.texture_repeat = false
+	material.uv1_scale = PLAYER_TEXTURE_UV_SCALE
+	material.uv1_offset = PLAYER_TEXTURE_UV_OFFSET
 	return material
 
 

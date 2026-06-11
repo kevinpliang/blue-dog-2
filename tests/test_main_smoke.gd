@@ -41,6 +41,9 @@ func _process(_delta: float) -> bool:
 	elif not _uses_moderate_lower_third_framing():
 		push_error("Main scene does not use the tuned moderate lower-third framing.")
 		quit(1)
+	elif not _uses_textured_rolling_player():
+		push_error("Main scene does not map the supplied texture onto the rolling player.")
+		quit(1)
 	elif _main.find_child("HudSafeArea", true, false) == null:
 		push_error("Main scene does not include a HUD safe-area container.")
 		quit(1)
@@ -132,3 +135,20 @@ func _uses_moderate_lower_third_framing() -> bool:
 		if not is_equal_approx(obstacle_node.position.z - float(obstacle["z"]), MainScript.TUNING.visual_action_plane_z):
 			return false
 	return checked_obstacle
+
+
+func _uses_textured_rolling_player() -> bool:
+	if not _main._player.material_override is StandardMaterial3D:
+		return false
+	var material: StandardMaterial3D = _main._player.material_override
+	if material.albedo_texture == null or material.albedo_texture.resource_path != "res://assets/player/white.png":
+		return false
+	if material.texture_repeat:
+		return false
+	if not material.uv1_scale.is_equal_approx(Vector3(4.0, 1.0, 1.0)):
+		return false
+	if not material.uv1_offset.is_equal_approx(Vector3(-1.5, 0.0, 0.0)):
+		return false
+	if _main._player.basis.x.x > -0.9:
+		return false
+	return not is_zero_approx(_main._player.rotation.x)
