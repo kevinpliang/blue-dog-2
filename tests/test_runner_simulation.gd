@@ -14,6 +14,8 @@ func run_all() -> Array[String]:
 	test_early_duck_runs_after_cooldown()
 	test_speed_caps_and_score_tracks_distance()
 	test_seeded_generation_is_deterministic_and_fair()
+	test_difficulty_tiers_unlock_by_distance()
+	test_generation_uses_curated_patterns()
 	test_collision_uses_interpolated_player_position()
 	test_high_score_only_increases()
 	return failures
@@ -122,6 +124,20 @@ func test_seeded_generation_is_deterministic_and_fair() -> void:
 
 	for row_id in row_lanes:
 		expect_true(row_lanes[row_id].size() < 3, "row %s leaves an open lane" % row_id)
+
+
+func test_difficulty_tiers_unlock_by_distance() -> void:
+	var simulation = Simulation.new()
+	expect_equal(simulation.difficulty_tier_at_distance(0.0), 0, "run starts at tier zero")
+	expect_equal(simulation.difficulty_tier_at_distance(250.0), 1, "middle distance unlocks tier one")
+	expect_equal(simulation.difficulty_tier_at_distance(650.0), 2, "long distance unlocks tier two")
+
+
+func test_generation_uses_curated_patterns() -> void:
+	var simulation = Simulation.new()
+	simulation.start(81)
+	for obstacle in simulation.obstacles:
+		expect_true(obstacle.has("pattern_id"), "generated obstacles identify their curated pattern")
 
 
 func test_collision_uses_interpolated_player_position() -> void:

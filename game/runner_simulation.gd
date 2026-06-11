@@ -1,6 +1,9 @@
 class_name RunnerSimulation
 extends RefCounted
 
+const PatternLibrary = preload("res://game/pattern_library.gd")
+const ReachabilityValidator = preload("res://game/reachability_validator.gd")
+
 enum RunState { READY, RUNNING, IMPACT, GAME_OVER }
 enum ObstacleType { GROUND_BLOCK, OVERHEAD_BAR, WALL }
 
@@ -16,6 +19,8 @@ const DUCK_COOLDOWN := 0.05
 const INPUT_BUFFER_DURATION := 0.12
 const IMPACT_DURATION := 0.3
 const SPAWN_LIMIT_Z := -80.0
+const TIER_ONE_DISTANCE := 250.0
+const TIER_TWO_DISTANCE := 650.0
 
 var state: RunState = RunState.READY
 var target_lane := 1
@@ -33,6 +38,7 @@ var obstacles: Array[Dictionary] = []
 var next_spawn_z := -28.0
 
 var _rng := RandomNumberGenerator.new()
+var _validator = ReachabilityValidator.new()
 var _next_obstacle_id := 1
 var _next_row_id := 1
 
@@ -142,6 +148,14 @@ func lane_x(lane: int) -> float:
 	return (lane - 1) * LANE_WIDTH
 
 
+func difficulty_tier_at_distance(value: float) -> int:
+	if value >= TIER_TWO_DISTANCE:
+		return 2
+	if value >= TIER_ONE_DISTANCE:
+		return 1
+	return 0
+
+
 static func updated_high_score(high_score: int, run_score: int) -> int:
 	return maxi(high_score, run_score)
 
@@ -168,35 +182,32 @@ func _apply_input_buffers() -> void:
 
 func _fill_obstacle_field() -> void:
 	while next_spawn_z > SPAWN_LIMIT_Z:
-		_spawn_row(next_spawn_z)
-		next_spawn_z -= _row_spacing()
+		_spawn_next_pattern(next_spawn_z)
 
 
-func _spawn_row(z_position: float) -> void:
-	var safe_lane := _rng.randi_range(0, 2)
-	var blocked_lanes: Array[int] = []
-	for lane in range(3):
-		if lane != safe_lane:
-			blocked_lanes.append(lane)
+func _spawn_next_pattern(z_position: float) -> void:
+	var candidates := PatternLibrary.unlocked_patterns(difficulty_tier_at_distance(distance))
+	var pattern: Dictionary = candidates[_rng.randi_range(0, candidates.size() - 1)]
+	for index in range(candidates.size()):
+		if _validator.is_reachable(pattern, speed):
+			break
+		pattern = candidates[(index + 1) % candidates.size()]
 
-	var obstacle_count := _rng.randi_range(1, 2)
-	var obstacle_type: int = _rng.randi_range(
-		ObstacleType.GROUND_BLOCK,
-		ObstacleType.WALL
-	)
-	if obstacle_count == 1 and _rng.randi_range(0, 1) == 1:
-		blocked_lanes.reverse()
-
-	for index in range(obstacle_count):
-		obstacles.append({
-			"id": _next_obstacle_id,
-			"row_id": _next_row_id,
-			"lane": blocked_lanes[index],
-			"type": obstacle_type,
-			"z": z_position,
-		})
-		_next_obstacle_id += 1
-	_next_row_id += 1
+	var last_offset := 0.0
+	for row in pattern["rows"]:
+		last_offset = float(row["offset"])
+		for pattern_obstacle in row["obstacles"]:
+			obstacles.append({
+				"id": _next_obstacle_id,
+				"row_id": _next_row_id,
+				"pattern_id": pattern["id"],
+				"lane": pattern_obstacle["lane"],
+				"type": pattern_obstacle["type"],
+				"z": z_position - last_offset,
+			})
+			_next_obstacle_id += 1
+		_next_row_id += 1
+	next_spawn_z = z_position - last_offset - _row_spacing()
 
 
 func _row_spacing() -> float:
