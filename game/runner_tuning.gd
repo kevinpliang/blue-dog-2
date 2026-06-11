@@ -15,6 +15,8 @@ extends Resource
 @export var track_fade_end := 145.0
 @export var obstacle_fade_start := 52.0
 @export var obstacle_fade_end := 72.0
+@export var camera_fov := 58.0
+@export var visual_action_plane_z := 2.0
 @export var shake_duration := 0.18
 @export var shake_strength := 0.12
 @export var audio_enabled := true

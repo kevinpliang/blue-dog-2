@@ -167,7 +167,7 @@ func _build_world() -> void:
 
 	_camera = Camera3D.new()
 	_camera.position = Vector3(0.0, 5.7, 10.0)
-	_camera.fov = 64.0
+	_camera.fov = TUNING.camera_fov
 	_camera.keep_aspect = Camera3D.KEEP_WIDTH
 	_camera.current = true
 	add_child(_camera)
@@ -192,7 +192,7 @@ func _build_world() -> void:
 	sphere.rings = 12
 	_player.mesh = sphere
 	_player.material_override = _make_material(Color.WHITE)
-	_player.position = Vector3(0.0, 0.75, 0.0)
+	_player.position = Vector3(0.0, 0.75, TUNING.visual_action_plane_z)
 	add_child(_player)
 
 	_player_light = OmniLight3D.new()
@@ -202,7 +202,7 @@ func _build_world() -> void:
 	_player_light.omni_range = 7.0
 	_player_light.omni_attenuation = 1.6
 	_player_light.shadow_enabled = false
-	_player_light.position = Vector3(0.0, 1.2, 1.0)
+	_player_light.position = Vector3(0.0, 1.2, TUNING.visual_action_plane_z)
 	add_child(_player_light)
 
 
@@ -359,7 +359,8 @@ func _make_obstacle_material(color: Color) -> ShaderMaterial:
 func _update_player(delta: float) -> void:
 	_player.position.x = simulation.current_x
 	_player.position.y = 0.75 + simulation.player_y
-	_player_light.position = Vector3(_player.position.x, _player.position.y + 0.45, 1.0)
+	_player.position.z = TUNING.visual_action_plane_z
+	_player_light.position = Vector3(_player.position.x, _player.position.y + 0.45, TUNING.visual_action_plane_z)
 
 	if simulation.state == Simulation.RunState.IMPACT:
 		_player.scale = Vector3.ONE * 1.15
@@ -394,7 +395,7 @@ func _sync_obstacles() -> void:
 		mesh_instance.position = Vector3(
 			simulation.lane_x(int(obstacle["lane"])),
 			_obstacle_y(obstacle_type),
-			float(obstacle["z"])
+			float(obstacle["z"]) + TUNING.visual_action_plane_z
 		)
 		mesh_instance.visible = true
 

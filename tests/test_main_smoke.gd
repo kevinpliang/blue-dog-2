@@ -38,6 +38,9 @@ func _process(_delta: float) -> bool:
 	elif not _uses_adaptive_fullscreen_layout():
 		push_error("Main scene does not use adaptive full-screen layout.")
 		quit(1)
+	elif not _uses_moderate_lower_third_framing():
+		push_error("Main scene does not use the tuned moderate lower-third framing.")
+		quit(1)
 	elif _main.find_child("HudSafeArea", true, false) == null:
 		push_error("Main scene does not include a HUD safe-area container.")
 		quit(1)
@@ -109,3 +112,23 @@ func _uses_adaptive_fullscreen_layout() -> bool:
 	if not is_zero_approx(_main._high_score_label.offset_top):
 		return false
 	return true
+
+
+func _uses_moderate_lower_third_framing() -> bool:
+	if not is_equal_approx(_main._camera.fov, MainScript.TUNING.camera_fov):
+		return false
+	if not is_equal_approx(_main._player.position.z, MainScript.TUNING.visual_action_plane_z):
+		return false
+	if not is_equal_approx(_main._player_light.position.z, MainScript.TUNING.visual_action_plane_z):
+		return false
+
+	var checked_obstacle := false
+	for obstacle in _main.simulation.obstacles:
+		var obstacle_id: int = obstacle["id"]
+		if not _main._obstacle_nodes.has(obstacle_id):
+			continue
+		checked_obstacle = true
+		var obstacle_node: MeshInstance3D = _main._obstacle_nodes[obstacle_id]
+		if not is_equal_approx(obstacle_node.position.z - float(obstacle["z"]), MainScript.TUNING.visual_action_plane_z):
+			return false
+	return checked_obstacle
