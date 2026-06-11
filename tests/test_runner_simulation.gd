@@ -16,6 +16,8 @@ func run_all() -> Array[String]:
 	test_seeded_generation_is_deterministic_and_fair()
 	test_difficulty_tiers_unlock_by_distance()
 	test_generation_uses_curated_patterns()
+	test_gameplay_events_drain_once()
+	test_multiplier_and_final_score()
 	test_collision_uses_interpolated_player_position()
 	test_high_score_only_increases()
 	return failures
@@ -140,6 +142,34 @@ func test_generation_uses_curated_patterns() -> void:
 		expect_true(obstacle.has("pattern_id"), "generated obstacles identify their curated pattern")
 
 
+func test_gameplay_events_drain_once() -> void:
+	var simulation = Simulation.new()
+	simulation.start(82)
+	clear_obstacles(simulation)
+	simulation.change_lane(1)
+	simulation.jump()
+	var events: Array[Dictionary] = simulation.drain_events()
+	expect_true(has_event(events, "lane_changed"), "lane change emits an event")
+	expect_true(has_event(events, "jumped"), "jump emits an event")
+	expect_equal(simulation.drain_events().size(), 0, "events drain only once")
+
+
+func test_multiplier_and_final_score() -> void:
+	var simulation = Simulation.new()
+	simulation.start(83)
+	clear_obstacles(simulation)
+	expect_equal(simulation.multiplier_for_streak(0), 1, "run starts at x1")
+	expect_equal(simulation.multiplier_for_streak(5), 2, "five clears reaches x2")
+	expect_equal(simulation.multiplier_for_streak(15), 3, "fifteen clears reaches x3")
+	expect_equal(simulation.multiplier_for_streak(30), 4, "thirty clears reaches cap")
+	for index in range(5):
+		simulation.record_obstacle_clear(index)
+	simulation.record_near_miss(99)
+	expect_equal(simulation.multiplier, 2, "clear streak updates multiplier")
+	expect_equal(simulation.near_miss_count, 1, "near misses are counted")
+	expect_equal(simulation.final_score(), simulation.distance_score() + 85, "final score includes clear and near-miss bonuses")
+
+
 func test_collision_uses_interpolated_player_position() -> void:
 	var simulation = Simulation.new()
 	simulation.start(5)
@@ -176,3 +206,10 @@ func expect_equal(actual: Variant, expected: Variant, message: String) -> void:
 func clear_obstacles(simulation: RefCounted) -> void:
 	simulation.obstacles.clear()
 	simulation.next_spawn_z = -10000.0
+
+
+func has_event(events: Array[Dictionary], type: String) -> bool:
+	for event in events:
+		if event["type"] == type:
+			return true
+	return false

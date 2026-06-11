@@ -36,6 +36,18 @@ func _process(_delta: float) -> bool:
 	elif _main.find_child("HudSafeArea", true, false) == null:
 		push_error("Main scene does not include a HUD safe-area container.")
 		quit(1)
+	elif _main.find_child("FeedbackController", true, false) == null:
+		push_error("Main scene does not include feedback.")
+		quit(1)
+	elif _main.find_child("RestartFade", true, false) == null:
+		push_error("Main scene does not include restart transition.")
+		quit(1)
+	elif _main.find_child("MultiplierLabel", true, false) == null:
+		push_error("Main scene does not include live multiplier HUD.")
+		quit(1)
+	elif _main.find_child("RunSummaryLabel", true, false) == null:
+		push_error("Main scene does not include game-over summary.")
+		quit(1)
 	else:
 		print("Dog Run active scene smoke test passed.")
 		quit(0)

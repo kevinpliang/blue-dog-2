@@ -2,6 +2,7 @@ extends Node3D
 
 const Simulation = preload("res://game/runner_simulation.gd")
 const InputInterpreter = preload("res://game/input_interpreter.gd")
+const FeedbackController = preload("res://game/feedback_controller.gd")
 const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader")
 const SAVE_PATH := "user://dog_run.cfg"
 
@@ -16,14 +17,23 @@ var _obstacle_pool: Array[MeshInstance3D] = []
 
 var _player: MeshInstance3D
 var _player_light: OmniLight3D
+var _camera: Camera3D
+var _feedback: FeedbackController
 var _score_label: Label
 var _high_score_label: Label
+var _multiplier_label: Label
 var _overlay_label: Label
+var _run_summary_label: Label
+var _restart_fade: ColorRect
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_world()
+	_feedback = FeedbackController.new()
+	_feedback.name = "FeedbackController"
+	add_child(_feedback)
+	_feedback.setup(_camera)
 	_build_hud()
 	_load_high_score()
 	_update_hud()
@@ -36,6 +46,7 @@ func _process(delta: float) -> void:
 	_handle_keyboard()
 	var previous_state: int = simulation.state
 	simulation.step(delta)
+	_feedback.handle_events(simulation.drain_events(), _player.position)
 	if previous_state != simulation.state and simulation.state == Simulation.RunState.GAME_OVER:
 		_finish_run()
 
@@ -64,9 +75,15 @@ func _unhandled_input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_WM_WINDOW_FOCUS_OUT:
-			_app_paused = true
+			set_app_paused(true)
 		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_WM_WINDOW_FOCUS_IN:
-			_app_paused = false
+			set_app_paused(false)
+
+
+func set_app_paused(value: bool) -> void:
+	_app_paused = value
+	if _feedback != null:
+		_feedback.set_feedback_paused(value)
 
 
 func _handle_pointer_release(end_position: Vector2) -> void:
@@ -91,6 +108,7 @@ func _handle_pointer_release(end_position: Vector2) -> void:
 func _handle_tap() -> void:
 	if simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER:
 		simulation.start(int(Time.get_ticks_usec()))
+		_play_restart_fade()
 
 
 func _handle_keyboard() -> void:
@@ -124,12 +142,12 @@ func _build_world() -> void:
 	light.shadow_enabled = false
 	add_child(light)
 
-	var camera := Camera3D.new()
-	camera.position = Vector3(0.0, 5.7, 10.0)
-	camera.fov = 64.0
-	camera.current = true
-	add_child(camera)
-	camera.look_at(Vector3(0.0, 0.8, -13.0), Vector3.UP)
+	_camera = Camera3D.new()
+	_camera.position = Vector3(0.0, 5.7, 10.0)
+	_camera.fov = 64.0
+	_camera.current = true
+	add_child(_camera)
+	_camera.look_at(Vector3(0.0, 0.8, -13.0), Vector3.UP)
 
 	_add_fading_box(
 		"Track",
@@ -168,6 +186,14 @@ func _build_hud() -> void:
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
 
+	_restart_fade = ColorRect.new()
+	_restart_fade.name = "RestartFade"
+	_restart_fade.color = Color.BLACK
+	_restart_fade.modulate.a = 0.0
+	_restart_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_restart_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	canvas.add_child(_restart_fade)
+
 	var safe_area := MarginContainer.new()
 	safe_area.name = "HudSafeArea"
 	safe_area.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -196,6 +222,15 @@ func _build_hud() -> void:
 	_style_label(_high_score_label, 30)
 	root.add_child(_high_score_label)
 
+	_multiplier_label = Label.new()
+	_multiplier_label.name = "MultiplierLabel"
+	_multiplier_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_multiplier_label.offset_top = 60.0
+	_multiplier_label.offset_bottom = 110.0
+	_multiplier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_style_label(_multiplier_label, 28)
+	root.add_child(_multiplier_label)
+
 	_overlay_label = Label.new()
 	_overlay_label.set_anchors_preset(Control.PRESET_CENTER)
 	_overlay_label.offset_left = -300.0
@@ -206,6 +241,18 @@ func _build_hud() -> void:
 	_overlay_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_style_label(_overlay_label, 42)
 	root.add_child(_overlay_label)
+
+	_run_summary_label = Label.new()
+	_run_summary_label.name = "RunSummaryLabel"
+	_run_summary_label.set_anchors_preset(Control.PRESET_CENTER)
+	_run_summary_label.offset_left = -300.0
+	_run_summary_label.offset_top = -180.0
+	_run_summary_label.offset_right = 300.0
+	_run_summary_label.offset_bottom = 220.0
+	_run_summary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_run_summary_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_style_label(_run_summary_label, 34)
+	root.add_child(_run_summary_label)
 
 func _style_label(label: Label, font_size: int) -> void:
 	label.add_theme_font_size_override("font_size", font_size)
@@ -359,14 +406,23 @@ func _obstacle_y(obstacle_type: int) -> float:
 func _update_hud() -> void:
 	_score_label.text = "SCORE  %d" % simulation.score()
 	_high_score_label.text = "BEST  %d" % high_score
+	_multiplier_label.text = "x%d" % simulation.multiplier
+	_multiplier_label.visible = simulation.state == Simulation.RunState.RUNNING and simulation.multiplier > 1
+	_run_summary_label.visible = false
 
 	match simulation.state:
 		Simulation.RunState.READY:
 			_overlay_label.text = "DOG RUN\nTap to Start"
 			_overlay_label.visible = true
 		Simulation.RunState.GAME_OVER:
-			_overlay_label.text = "GAME OVER\nTap to Restart"
-			_overlay_label.visible = true
+			_overlay_label.visible = false
+			_run_summary_label.text = "GAME OVER\n\nDistance  %dm\nPeak  x%d\nNear Misses  %d\nScore  %d\n\nTap to Restart" % [
+				simulation.distance_score(),
+				simulation.peak_multiplier,
+				simulation.near_miss_count,
+				simulation.final_score(),
+			]
+			_run_summary_label.visible = true
 		_:
 			_overlay_label.visible = false
 
@@ -385,3 +441,11 @@ func _load_high_score() -> void:
 	var config := ConfigFile.new()
 	if config.load(SAVE_PATH) == OK:
 		high_score = int(config.get_value("scores", "high_score", 0))
+
+
+func _play_restart_fade() -> void:
+	if _restart_fade == null:
+		return
+	_restart_fade.modulate.a = 0.85
+	var tween := create_tween()
+	tween.tween_property(_restart_fade, "modulate:a", 0.0, 0.18)

@@ -34,11 +34,18 @@ var duck_buffer_time := 0.0
 var impact_time := 0.0
 var speed := START_SPEED
 var distance := 0.0
+var clear_streak := 0
+var multiplier := 1
+var peak_multiplier := 1
+var near_miss_count := 0
+var clear_bonus := 0
+var near_miss_bonus := 0
 var obstacles: Array[Dictionary] = []
 var next_spawn_z := -28.0
 
 var _rng := RandomNumberGenerator.new()
 var _validator = ReachabilityValidator.new()
+var _events: Array[Dictionary] = []
 var _next_obstacle_id := 1
 var _next_row_id := 1
 
@@ -56,6 +63,13 @@ func start(seed_value: int) -> void:
 	impact_time = 0.0
 	speed = START_SPEED
 	distance = 0.0
+	clear_streak = 0
+	multiplier = 1
+	peak_multiplier = 1
+	near_miss_count = 0
+	clear_bonus = 0
+	near_miss_bonus = 0
+	_events.clear()
 	obstacles.clear()
 	next_spawn_z = -28.0
 	_next_obstacle_id = 1
@@ -78,7 +92,10 @@ func step(delta: float) -> void:
 	var travel := speed * delta
 	distance += travel
 	current_x = move_toward(current_x, lane_x(target_lane), LANE_CHANGE_SPEED * delta)
+	var was_grounded := is_grounded()
 	_update_vertical_motion(delta)
+	if not was_grounded and is_grounded():
+		_emit_event("landed")
 	duck_time = maxf(0.0, duck_time - delta)
 	duck_cooldown_time = maxf(0.0, duck_cooldown_time - delta)
 	jump_buffer_time = maxf(0.0, jump_buffer_time - delta)
@@ -93,8 +110,10 @@ func step(delta: float) -> void:
 	if _has_collision():
 		state = RunState.IMPACT
 		impact_time = IMPACT_DURATION
+		_emit_event("collision")
 		return
 
+	_mark_passed_obstacles()
 	for index in range(obstacles.size() - 1, -1, -1):
 		if float(obstacles[index]["z"]) > 6.0:
 			obstacles.remove_at(index)
@@ -103,7 +122,10 @@ func step(delta: float) -> void:
 func change_lane(direction: int) -> void:
 	if state != RunState.RUNNING:
 		return
+	var previous_lane := target_lane
 	target_lane = clampi(target_lane + signi(direction), 0, 2)
+	if target_lane != previous_lane:
+		_emit_event("lane_changed")
 
 
 func jump() -> void:
@@ -119,6 +141,7 @@ func _start_jump() -> void:
 	duck_time = 0.0
 	jump_buffer_time = 0.0
 	vertical_velocity = JUMP_VELOCITY
+	_emit_event("jumped")
 
 
 func duck() -> void:
@@ -134,6 +157,7 @@ func _start_duck() -> void:
 	duck_buffer_time = 0.0
 	duck_time = DUCK_DURATION
 	duck_cooldown_time = DUCK_DURATION + DUCK_COOLDOWN
+	_emit_event("ducked")
 
 
 func is_grounded() -> bool:
@@ -141,7 +165,45 @@ func is_grounded() -> bool:
 
 
 func score() -> int:
+	return final_score()
+
+
+func distance_score() -> int:
 	return int(floor(distance))
+
+
+func final_score() -> int:
+	return distance_score() + clear_bonus + near_miss_bonus
+
+
+func multiplier_for_streak(streak: int) -> int:
+	if streak >= 30:
+		return 4
+	if streak >= 15:
+		return 3
+	if streak >= 5:
+		return 2
+	return 1
+
+
+func record_obstacle_clear(obstacle_id: int) -> void:
+	clear_streak += 1
+	multiplier = multiplier_for_streak(clear_streak)
+	peak_multiplier = maxi(peak_multiplier, multiplier)
+	clear_bonus += 10 * multiplier
+	_events.append({"type": "obstacle_cleared", "obstacle_id": obstacle_id})
+
+
+func record_near_miss(obstacle_id: int) -> void:
+	near_miss_count += 1
+	near_miss_bonus += 25
+	_events.append({"type": "near_miss", "obstacle_id": obstacle_id})
+
+
+func drain_events() -> Array[Dictionary]:
+	var result := _events.duplicate(true)
+	_events.clear()
+	return result
 
 
 func lane_x(lane: int) -> float:
@@ -204,6 +266,7 @@ func _spawn_next_pattern(z_position: float) -> void:
 				"lane": pattern_obstacle["lane"],
 				"type": pattern_obstacle["type"],
 				"z": z_position - last_offset,
+				"passed": false,
 			})
 			_next_obstacle_id += 1
 		_next_row_id += 1
@@ -231,3 +294,17 @@ func _has_collision() -> bool:
 			ObstacleType.WALL:
 				return true
 	return false
+
+
+func _mark_passed_obstacles() -> void:
+	for obstacle in obstacles:
+		if bool(obstacle.get("passed", false)) or float(obstacle["z"]) <= 0.9:
+			continue
+		obstacle["passed"] = true
+		record_obstacle_clear(int(obstacle["id"]))
+		if absf(current_x - lane_x(int(obstacle["lane"]))) <= 0.9:
+			record_near_miss(int(obstacle["id"]))
+
+
+func _emit_event(type: String) -> void:
+	_events.append({"type": type})
