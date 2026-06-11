@@ -9,6 +9,7 @@ var failures: Array[String] = []
 func run_all() -> Array[String]:
 	expect_equal(LimitsScript.MAX_OBSTACLE_NODES, 48, "obstacle visual pool has a hard cap")
 	expect_equal(FeedbackController.IMPACT_POOL_SIZE, 4, "particle pool has a hard cap")
+	expect_equal(LimitsScript.MAX_PARTICLE_NODES, 5, "particle nodes include one bounded speed trail")
 	expect_equal(FeedbackController.AUDIO_POOL_SIZE, 8, "audio pool has a hard cap")
 	return failures
 func expect_equal(actual: Variant, expected: Variant, message: String) -> void:

@@ -27,8 +27,11 @@ var _pointer_tracking := false
 var _obstacle_nodes := {}
 var _obstacle_pool: Array[MeshInstance3D] = []
 
+var _player_visual_pivot: Node3D
 var _player: MeshInstance3D
 var _player_light: OmniLight3D
+var _speed_trail: GPUParticles3D
+var _speed_trail_material: ParticleProcessMaterial
 var _camera: Camera3D
 var _feedback: FeedbackController
 var _score_label: Label
@@ -37,6 +40,8 @@ var _multiplier_label: Label
 var _overlay_label: Label
 var _run_summary_label: Label
 var _restart_fade: ColorRect
+var _previous_player_x := 0.0
+var _landing_pulse_time := 0.0
 
 
 func _ready() -> void:
@@ -58,7 +63,9 @@ func _process(delta: float) -> void:
 	_handle_keyboard()
 	var previous_state: int = simulation.state
 	advance_simulation(delta)
-	_feedback.handle_events(simulation.drain_events(), _player.position)
+	var events := simulation.drain_events()
+	_feedback.handle_events(events, _player_visual_pivot.position)
+	_handle_player_feedback_events(events)
 	if previous_state != simulation.state and simulation.state == Simulation.RunState.GAME_OVER:
 		_finish_run()
 
@@ -134,6 +141,8 @@ func _handle_pointer_release(end_position: Vector2) -> void:
 func _handle_tap() -> void:
 	if simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER:
 		simulation.start(int(Time.get_ticks_usec()))
+		_previous_player_x = simulation.current_x
+		_landing_pulse_time = 0.0
 		_play_restart_fade()
 
 
@@ -187,6 +196,11 @@ func _build_world() -> void:
 	_add_fading_box("TrackEdgeLeft", Vector3(0.12, 0.12, TRACK_LENGTH), Vector3(-4.25, 0.02, TRACK_CENTER_Z), Color(0.0, 0.55, 0.7))
 	_add_fading_box("TrackEdgeRight", Vector3(0.12, 0.12, TRACK_LENGTH), Vector3(4.25, 0.02, TRACK_CENTER_Z), Color(0.0, 0.55, 0.7))
 
+	_player_visual_pivot = Node3D.new()
+	_player_visual_pivot.name = "PlayerVisualPivot"
+	_player_visual_pivot.position = Vector3(0.0, 0.75, TUNING.visual_action_plane_z)
+	add_child(_player_visual_pivot)
+
 	_player = MeshInstance3D.new()
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.75
@@ -195,9 +209,8 @@ func _build_world() -> void:
 	sphere.rings = 12
 	_player.mesh = sphere
 	_player.material_override = _make_player_material()
-	_player.position = Vector3(0.0, 0.75, TUNING.visual_action_plane_z)
 	_player.rotation.y = PI
-	add_child(_player)
+	_player_visual_pivot.add_child(_player)
 
 	_player_light = OmniLight3D.new()
 	_player_light.name = "PlayerLight"
@@ -208,6 +221,38 @@ func _build_world() -> void:
 	_player_light.shadow_enabled = false
 	_player_light.position = Vector3(0.0, 1.2, TUNING.visual_action_plane_z)
 	add_child(_player_light)
+
+	_build_speed_trail()
+
+
+func _build_speed_trail() -> void:
+	_speed_trail = GPUParticles3D.new()
+	_speed_trail.name = "PlayerSpeedTrail"
+	_speed_trail.amount = 24
+	_speed_trail.lifetime = 0.45
+	_speed_trail.local_coords = false
+	_speed_trail.emitting = false
+	_speed_trail.visibility_aabb = AABB(Vector3(-8.0, -4.0, -4.0), Vector3(16.0, 8.0, 16.0))
+
+	_speed_trail_material = ParticleProcessMaterial.new()
+	_speed_trail_material.direction = Vector3(0.0, 0.0, 1.0)
+	_speed_trail_material.spread = 10.0
+	_speed_trail_material.gravity = Vector3.ZERO
+	_speed_trail_material.color = Color(0.0, 0.85, 1.0, 0.32)
+	_speed_trail.process_material = _speed_trail_material
+
+	var particle_mesh := BoxMesh.new()
+	particle_mesh.size = Vector3(0.035, 0.035, 0.14)
+	var trail_material := StandardMaterial3D.new()
+	trail_material.albedo_color = Color(0.0, 0.85, 1.0, 0.24)
+	trail_material.emission_enabled = true
+	trail_material.emission = Color(0.0, 0.85, 1.0)
+	trail_material.emission_energy_multiplier = 1.2
+	trail_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	trail_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_mesh.material = trail_material
+	_speed_trail.draw_pass_1 = particle_mesh
+	add_child(_speed_trail)
 
 
 func _build_hud() -> void:
@@ -369,24 +414,78 @@ func _make_obstacle_material(color: Color) -> ShaderMaterial:
 	return material
 
 
+func _handle_player_feedback_events(events: Array) -> void:
+	for event in events:
+		if event["type"] == "landed":
+			_landing_pulse_time = TUNING.landing_pulse_duration
+
+
 func _update_player(delta: float) -> void:
-	_player.position.x = simulation.current_x
-	_player.position.y = 0.75 + simulation.player_y
-	_player.position.z = TUNING.visual_action_plane_z
-	_player_light.position = Vector3(_player.position.x, _player.position.y + 0.45, TUNING.visual_action_plane_z)
+	var lateral_velocity: float = (simulation.current_x - _previous_player_x) / maxf(delta, 0.0001)
+	_previous_player_x = simulation.current_x
+	_landing_pulse_time = maxf(0.0, _landing_pulse_time - delta)
+
+	_player_visual_pivot.position = Vector3(
+		simulation.current_x,
+		0.75 + simulation.player_y,
+		TUNING.visual_action_plane_z
+	)
+	_player_light.position = Vector3(
+		_player_visual_pivot.position.x,
+		_player_visual_pivot.position.y + 0.45,
+		TUNING.visual_action_plane_z
+	)
 
 	if simulation.state == Simulation.RunState.IMPACT:
-		_player.scale = Vector3.ONE * 1.15
+		_player_visual_pivot.scale = Vector3.ONE * 1.15
 	elif simulation.duck_time > 0.0:
-		_player.scale = Vector3(1.0, 0.55, 1.0)
-		_player.position.y = 0.43
+		_player_visual_pivot.scale = Vector3(1.0, 0.55, 1.0)
+		_player_visual_pivot.position.y = 0.43
+	elif _landing_pulse_time > 0.0:
+		var pulse_duration := maxf(TUNING.landing_pulse_duration, 0.001)
+		var pulse := sin(_landing_pulse_time / pulse_duration * PI)
+		_player_visual_pivot.scale = Vector3(
+			lerpf(1.0, TUNING.landing_squash_horizontal, pulse),
+			lerpf(1.0, TUNING.landing_squash_vertical, pulse),
+			lerpf(1.0, TUNING.landing_squash_horizontal, pulse)
+		)
+	elif simulation.player_y > 0.0 and simulation.vertical_velocity > 0.0:
+		var rise_ratio := clampf(simulation.vertical_velocity / TUNING.jump_velocity, 0.0, 1.0)
+		_player_visual_pivot.scale = Vector3(
+			lerpf(1.0, TUNING.jump_stretch_horizontal, rise_ratio),
+			lerpf(1.0, TUNING.jump_stretch_vertical, rise_ratio),
+			lerpf(1.0, TUNING.jump_stretch_horizontal, rise_ratio)
+		)
 	else:
-		_player.scale = Vector3.ONE
+		_player_visual_pivot.scale = Vector3.ONE
+
+	var lean_target := -clampf(lateral_velocity / TUNING.lane_change_speed, -1.0, 1.0)
+	lean_target *= deg_to_rad(TUNING.lane_lean_max_degrees)
+	if simulation.state == Simulation.RunState.IMPACT:
+		lean_target = 0.0
+	var lean_weight := 1.0 - exp(-TUNING.lane_lean_smoothing * delta)
+	_player_visual_pivot.rotation.z = lerp_angle(_player_visual_pivot.rotation.z, lean_target, lean_weight)
 
 	if simulation.state == Simulation.RunState.RUNNING:
 		var speed_ratio := inverse_lerp(TUNING.start_speed, TUNING.max_speed, simulation.speed)
 		var spin_rate := lerpf(TUNING.player_spin_start_rate, TUNING.player_spin_max_rate, speed_ratio)
 		_player.rotate_x(-spin_rate * delta)
+
+	_update_speed_trail()
+
+
+func _update_speed_trail() -> void:
+	var speed_ratio := clampf(inverse_lerp(TUNING.start_speed, TUNING.max_speed, simulation.speed), 0.0, 1.0)
+	var trail_velocity := lerpf(TUNING.speed_trail_min_velocity, TUNING.speed_trail_max_velocity, speed_ratio)
+	_speed_trail.amount_ratio = clampf(
+		lerpf(TUNING.speed_trail_min_amount_ratio, TUNING.speed_trail_max_amount_ratio, speed_ratio),
+		0.0,
+		1.0
+	)
+	_speed_trail_material.initial_velocity_min = trail_velocity * 0.8
+	_speed_trail_material.initial_velocity_max = trail_velocity * 1.2
+	_speed_trail.position = _player_visual_pivot.position + Vector3(0.0, 0.0, 0.55)
+	_speed_trail.emitting = simulation.state == Simulation.RunState.RUNNING
 
 
 func _sync_obstacles() -> void:

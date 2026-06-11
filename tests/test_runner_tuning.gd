@@ -16,6 +16,17 @@ func run_all() -> Array[String]:
 	expect_equal(TUNING.obstacle_fade_end, 72.0, "obstacle fade hides the spawn boundary")
 	expect_property_equal(TUNING, "camera_fov", 58.0, "camera uses moderate FOV zoom")
 	expect_property_equal(TUNING, "visual_action_plane_z", 2.0, "visual action plane sits closer to camera")
+	expect_property_equal(TUNING, "lane_lean_max_degrees", 12.0, "lane lean stays subtle")
+	expect_property_equal(TUNING, "lane_lean_smoothing", 12.0, "lane lean responds smoothly")
+	expect_property_equal(TUNING, "jump_stretch_horizontal", 0.88, "jump stretch narrows the player")
+	expect_property_equal(TUNING, "jump_stretch_vertical", 1.15, "jump stretch lengthens the player")
+	expect_property_equal(TUNING, "landing_squash_horizontal", 1.12, "landing pulse widens the player")
+	expect_property_equal(TUNING, "landing_squash_vertical", 0.82, "landing pulse shortens the player")
+	expect_property_equal(TUNING, "landing_pulse_duration", 0.16, "landing pulse stays brief")
+	expect_property_equal(TUNING, "speed_trail_min_amount_ratio", 0.15, "speed trail starts subtle")
+	expect_property_equal(TUNING, "speed_trail_max_amount_ratio", 0.65, "speed trail remains restrained")
+	expect_property_equal(TUNING, "speed_trail_min_velocity", 1.5, "speed trail starts slowly")
+	expect_property_equal(TUNING, "speed_trail_max_velocity", 4.0, "speed trail scales with speed")
 	return failures
 
 

@@ -19,6 +19,17 @@ extends Resource
 @export var visual_action_plane_z := 2.0
 @export var player_spin_start_rate := 5.0
 @export var player_spin_max_rate := 9.0
+@export var lane_lean_max_degrees := 12.0
+@export var lane_lean_smoothing := 12.0
+@export var jump_stretch_horizontal := 0.88
+@export var jump_stretch_vertical := 1.15
+@export var landing_squash_horizontal := 1.12
+@export var landing_squash_vertical := 0.82
+@export var landing_pulse_duration := 0.16
+@export var speed_trail_min_amount_ratio := 0.15
+@export var speed_trail_max_amount_ratio := 0.65
+@export var speed_trail_min_velocity := 1.5
+@export var speed_trail_max_velocity := 4.0
 @export var shake_duration := 0.18
 @export var shake_strength := 0.12
 @export var audio_enabled := true

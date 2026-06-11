@@ -44,6 +44,9 @@ func _process(_delta: float) -> bool:
 	elif not _uses_textured_rolling_player():
 		push_error("Main scene does not map the supplied texture onto the rolling player.")
 		quit(1)
+	elif not _uses_movement_feedback():
+		push_error("Main scene does not include tuned player movement feedback.")
+		quit(1)
 	elif _main.find_child("HudSafeArea", true, false) == null:
 		push_error("Main scene does not include a HUD safe-area container.")
 		quit(1)
@@ -60,6 +63,7 @@ func _process(_delta: float) -> bool:
 		push_error("Main scene does not include game-over summary.")
 		quit(1)
 	else:
+		_main._feedback.set_feedback_paused(true)
 		print("Dog Run active scene smoke test passed.")
 		quit(0)
 	return true
@@ -120,7 +124,7 @@ func _uses_adaptive_fullscreen_layout() -> bool:
 func _uses_moderate_lower_third_framing() -> bool:
 	if not is_equal_approx(_main._camera.fov, MainScript.TUNING.camera_fov):
 		return false
-	if not is_equal_approx(_main._player.position.z, MainScript.TUNING.visual_action_plane_z):
+	if not is_equal_approx(_main._player_visual_pivot.position.z, MainScript.TUNING.visual_action_plane_z):
 		return false
 	if not is_equal_approx(_main._player_light.position.z, MainScript.TUNING.visual_action_plane_z):
 		return false
@@ -152,3 +156,34 @@ func _uses_textured_rolling_player() -> bool:
 	if _main._player.basis.x.x > -0.9:
 		return false
 	return not is_zero_approx(_main._player.rotation.x)
+
+
+func _uses_movement_feedback() -> bool:
+	var pivot: Node3D = _main.find_child("PlayerVisualPivot", true, false)
+	var trail: GPUParticles3D = _main.find_child("PlayerSpeedTrail", true, false)
+	if pivot == null or trail == null or trail.local_coords:
+		return false
+	if not _main.has_method("_handle_player_feedback_events"):
+		return false
+
+	_main.simulation.change_lane(1)
+	_main.advance_simulation(0.05)
+	_main._update_player(0.05)
+	if is_zero_approx(pivot.rotation.z):
+		return false
+
+	_main.simulation.player_y = 0.5
+	_main.simulation.vertical_velocity = MainScript.TUNING.jump_velocity
+	_main._update_player(0.01)
+	if pivot.scale.y <= 1.0 or pivot.scale.x >= 1.0:
+		return false
+
+	_main._handle_player_feedback_events([{"type": "landed"}])
+	if _main._landing_pulse_time <= 0.0:
+		return false
+	_main.simulation.player_y = 0.0
+	_main.simulation.vertical_velocity = 0.0
+	_main._update_player(MainScript.TUNING.landing_pulse_duration * 0.5)
+	if pivot.scale.x <= 1.0 or pivot.scale.y >= 1.0:
+		return false
+	return trail.amount_ratio > 0.0
