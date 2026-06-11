@@ -32,6 +32,9 @@ func _process(_delta: float) -> bool:
 	elif not _track_uses_distance_fade():
 		push_error("Track visuals do not use the distance fade shader.")
 		quit(1)
+	elif not _track_extends_behind_camera():
+		push_error("Track visuals do not extend behind the camera.")
+		quit(1)
 	elif not _uses_adaptive_fullscreen_layout():
 		push_error("Main scene does not use adaptive full-screen layout.")
 		quit(1)
@@ -80,6 +83,18 @@ func _track_uses_distance_fade() -> bool:
 			return false
 		var material: ShaderMaterial = node.material_override
 		if material.shader == null or material.shader.resource_path != "res://game/shaders/distance_fade.gdshader":
+			return false
+	return true
+
+
+func _track_extends_behind_camera() -> bool:
+	for node_name in ["Track", "LaneDividerLeft", "LaneDividerRight", "TrackEdgeLeft", "TrackEdgeRight"]:
+		var node: MeshInstance3D = _main.find_child(node_name, true, false)
+		if node == null or not node.mesh is BoxMesh:
+			return false
+		var box: BoxMesh = node.mesh
+		var near_edge := node.position.z + box.size.z * 0.5
+		if near_edge <= _main._camera.position.z:
 			return false
 	return true
 

@@ -11,6 +11,8 @@ const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_dista
 const SAVE_PATH := "user://dog_run.cfg"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
 const OBSTACLE_OPACITY := 0.4
+const TRACK_LENGTH := 250.0
+const TRACK_CENTER_Z := -90.0
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
@@ -173,14 +175,14 @@ func _build_world() -> void:
 
 	_add_fading_box(
 		"Track",
-		Vector3(8.6, 0.2, 220.0),
-		Vector3(0.0, -0.12, -105.0),
+		Vector3(8.6, 0.2, TRACK_LENGTH),
+		Vector3(0.0, -0.12, TRACK_CENTER_Z),
 		Color(0.035, 0.045, 0.065)
 	)
-	_add_fading_box("LaneDividerLeft", Vector3(0.07, 0.035, 220.0), Vector3(-1.2, 0.01, -105.0), Color(0.0, 0.9, 1.0))
-	_add_fading_box("LaneDividerRight", Vector3(0.07, 0.035, 220.0), Vector3(1.2, 0.01, -105.0), Color(0.0, 0.9, 1.0))
-	_add_fading_box("TrackEdgeLeft", Vector3(0.12, 0.12, 220.0), Vector3(-4.25, 0.02, -105.0), Color(0.0, 0.55, 0.7))
-	_add_fading_box("TrackEdgeRight", Vector3(0.12, 0.12, 220.0), Vector3(4.25, 0.02, -105.0), Color(0.0, 0.55, 0.7))
+	_add_fading_box("LaneDividerLeft", Vector3(0.07, 0.035, TRACK_LENGTH), Vector3(-1.2, 0.01, TRACK_CENTER_Z), Color(0.0, 0.9, 1.0))
+	_add_fading_box("LaneDividerRight", Vector3(0.07, 0.035, TRACK_LENGTH), Vector3(1.2, 0.01, TRACK_CENTER_Z), Color(0.0, 0.9, 1.0))
+	_add_fading_box("TrackEdgeLeft", Vector3(0.12, 0.12, TRACK_LENGTH), Vector3(-4.25, 0.02, TRACK_CENTER_Z), Color(0.0, 0.55, 0.7))
+	_add_fading_box("TrackEdgeRight", Vector3(0.12, 0.12, TRACK_LENGTH), Vector3(4.25, 0.02, TRACK_CENTER_Z), Color(0.0, 0.55, 0.7))
 
 	_player = MeshInstance3D.new()
 	var sphere := SphereMesh.new()
