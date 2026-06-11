@@ -384,7 +384,9 @@ func _update_player(delta: float) -> void:
 		_player.scale = Vector3.ONE
 
 	if simulation.state == Simulation.RunState.RUNNING:
-		_player.rotate_x(-simulation.speed * delta / 0.75)
+		var speed_ratio := inverse_lerp(TUNING.start_speed, TUNING.max_speed, simulation.speed)
+		var spin_rate := lerpf(TUNING.player_spin_start_rate, TUNING.player_spin_max_rate, speed_ratio)
+		_player.rotate_x(-spin_rate * delta)
 
 
 func _sync_obstacles() -> void:

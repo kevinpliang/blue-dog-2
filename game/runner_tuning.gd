@@ -17,6 +17,8 @@ extends Resource
 @export var obstacle_fade_end := 72.0
 @export var camera_fov := 58.0
 @export var visual_action_plane_z := 2.0
+@export var player_spin_start_rate := 5.0
+@export var player_spin_max_rate := 9.0
 @export var shake_duration := 0.18
 @export var shake_strength := 0.12
 @export var audio_enabled := true
