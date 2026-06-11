@@ -62,6 +62,9 @@ func _process(_delta: float) -> bool:
 	elif _main.find_child("RunSummaryLabel", true, false) == null:
 		push_error("Main scene does not include game-over summary.")
 		quit(1)
+	elif not _uses_first_launch_tutorial():
+		push_error("Main scene does not show and persist the first-launch tutorial.")
+		quit(1)
 	else:
 		_main._feedback.set_feedback_paused(true)
 		print("Dog Run active scene smoke test passed.")
@@ -197,3 +200,27 @@ func _uses_movement_feedback() -> bool:
 		return false
 	var expected_basis := Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, after_duck_roll)
 	return _main._player.basis.is_equal_approx(expected_basis)
+
+
+func _uses_first_launch_tutorial() -> bool:
+	var tutorial_save_path := "user://dog_run_tutorial_smoke.cfg"
+	var absolute_path := ProjectSettings.globalize_path(tutorial_save_path)
+	DirAccess.remove_absolute(absolute_path)
+	_main._save_path = tutorial_save_path
+	_main._tutorial_completed = false
+	_main.simulation.state = _main.simulation.RunState.READY
+	_main._update_hud()
+	if _main._overlay_label.text != MainScript.FIRST_LAUNCH_TUTORIAL_TEXT:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main._handle_tap()
+	if not _main._tutorial_completed or _main.simulation.state != _main.simulation.RunState.RUNNING:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	var config := ConfigFile.new()
+	var persisted := config.load(tutorial_save_path) == OK
+	persisted = persisted and bool(config.get_value("progress", "tutorial_completed", false))
+	DirAccess.remove_absolute(absolute_path)
+	return persisted

@@ -10,6 +10,7 @@ const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader"
 const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
 const PLAYER_TEXTURE = preload("res://assets/player/white.png")
 const SAVE_PATH := "user://dog_run.cfg"
+const FIRST_LAUNCH_TUTORIAL_TEXT := "SWIPE LEFT / RIGHT TO MOVE\nSWIPE UP TO JUMP\nSWIPE DOWN TO DUCK\n\nTap to Start"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
 const OBSTACLE_OPACITY := 0.4
 const PLAYER_TEXTURE_UV_SCALE := Vector3(4.0, 1.0, 1.0)
@@ -21,6 +22,8 @@ var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
 var performance_monitor = PerformanceMonitor.new()
 var high_score := 0
+var _save_path := SAVE_PATH
+var _tutorial_completed := false
 var _app_paused := false
 var _pointer_start := Vector2.ZERO
 var _pointer_tracking := false
@@ -51,7 +54,7 @@ func _ready() -> void:
 	add_child(_feedback)
 	_feedback.setup(_camera)
 	_build_hud()
-	_load_high_score()
+	_load_progress()
 	_update_hud()
 
 
@@ -139,6 +142,9 @@ func _handle_pointer_release(end_position: Vector2) -> void:
 
 func _handle_tap() -> void:
 	if simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER:
+		if simulation.state == Simulation.RunState.READY and not _tutorial_completed:
+			_tutorial_completed = true
+			_save_progress()
 		simulation.start(int(Time.get_ticks_usec()))
 		_previous_player_x = simulation.current_x
 		_landing_pulse_time = 0.0
@@ -520,7 +526,7 @@ func _update_hud() -> void:
 
 	match simulation.state:
 		Simulation.RunState.READY:
-			_overlay_label.text = "DOG RUN\nTap to Start"
+			_overlay_label.text = FIRST_LAUNCH_TUTORIAL_TEXT if not _tutorial_completed else "DOG RUN\nTap to Start"
 			_overlay_label.visible = true
 		Simulation.RunState.GAME_OVER:
 			_overlay_label.visible = false
@@ -540,15 +546,21 @@ func _finish_run() -> void:
 	if updated == high_score:
 		return
 	high_score = updated
+	_save_progress()
+
+
+func _save_progress() -> void:
 	var config := ConfigFile.new()
 	config.set_value("scores", "high_score", high_score)
-	config.save(SAVE_PATH)
+	config.set_value("progress", "tutorial_completed", _tutorial_completed)
+	config.save(_save_path)
 
 
-func _load_high_score() -> void:
+func _load_progress() -> void:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) == OK:
+	if config.load(_save_path) == OK:
 		high_score = int(config.get_value("scores", "high_score", 0))
+		_tutorial_completed = bool(config.get_value("progress", "tutorial_completed", false))
 
 
 func _play_restart_fade() -> void:
