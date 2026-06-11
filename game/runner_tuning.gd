@@ -6,7 +6,7 @@ extends Resource
 @export var start_speed := 12.0
 @export var max_speed := 24.0
 @export var speed_acceleration := 0.35
-@export var lane_change_speed := 16.0
+@export var lane_change_speed := 32.0
 @export var jump_velocity := 9.5
 @export var gravity := 24.0
 @export var input_buffer_duration := 0.12
