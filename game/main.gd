@@ -7,6 +7,7 @@ const PerformanceMonitor = preload("res://game/performance_monitor.gd")
 const LimitsScript = preload("res://game/runtime_limits.gd")
 const TUNING = preload("res://game/default_runner_tuning.tres")
 const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader")
+const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
 const SAVE_PATH := "user://dog_run.cfg"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
 const OBSTACLE_OPACITY := 0.4
@@ -165,6 +166,7 @@ func _build_world() -> void:
 	_camera = Camera3D.new()
 	_camera.position = Vector3(0.0, 5.7, 10.0)
 	_camera.fov = 64.0
+	_camera.keep_aspect = Camera3D.KEEP_WIDTH
 	_camera.current = true
 	add_child(_camera)
 	_camera.look_at(Vector3(0.0, 0.8, -13.0), Vector3.UP)
@@ -226,18 +228,18 @@ func _build_hud() -> void:
 
 	_score_label = Label.new()
 	_score_label.offset_left = 24.0
-	_score_label.offset_top = 20.0
+	_score_label.offset_top = 0.0
 	_score_label.offset_right = 300.0
-	_score_label.offset_bottom = 80.0
+	_score_label.offset_bottom = 60.0
 	_style_label(_score_label, 30)
 	root.add_child(_score_label)
 
 	_high_score_label = Label.new()
 	_high_score_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_high_score_label.offset_left = -320.0
-	_high_score_label.offset_top = 20.0
+	_high_score_label.offset_top = 0.0
 	_high_score_label.offset_right = -24.0
-	_high_score_label.offset_bottom = 80.0
+	_high_score_label.offset_bottom = 60.0
 	_high_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_style_label(_high_score_label, 30)
 	root.add_child(_high_score_label)
@@ -343,6 +345,15 @@ func _make_material(color: Color, emission := false, opacity := 1.0) -> Standard
 	return material
 
 
+func _make_obstacle_material(color: Color) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = OBSTACLE_DISTANCE_FADE_SHADER
+	material.set_shader_parameter("base_color", Color(color, OBSTACLE_OPACITY))
+	material.set_shader_parameter("fade_start", TUNING.obstacle_fade_start)
+	material.set_shader_parameter("fade_end", TUNING.obstacle_fade_end)
+	return material
+
+
 func _update_player(delta: float) -> void:
 	_player.position.x = simulation.current_x
 	_player.position.y = 0.75 + simulation.player_y
@@ -409,13 +420,13 @@ func _configure_obstacle(mesh_instance: MeshInstance3D, obstacle_type: int) -> v
 	match obstacle_type:
 		Simulation.ObstacleType.GROUND_BLOCK:
 			box.size = Vector3(1.65, 1.55, 1.1)
-			mesh_instance.material_override = _make_material(Color(1.0, 0.38, 0.08), true, OBSTACLE_OPACITY)
+			mesh_instance.material_override = _make_obstacle_material(Color(1.0, 0.38, 0.08))
 		Simulation.ObstacleType.OVERHEAD_BAR:
 			box.size = Vector3(1.9, 0.5, 1.1)
-			mesh_instance.material_override = _make_material(Color(0.85, 0.15, 1.0), true, OBSTACLE_OPACITY)
+			mesh_instance.material_override = _make_obstacle_material(Color(0.85, 0.15, 1.0))
 		Simulation.ObstacleType.WALL:
 			box.size = Vector3(1.9, 3.2, 0.85)
-			mesh_instance.material_override = _make_material(Color(1.0, 0.08, 0.38), true, OBSTACLE_OPACITY)
+			mesh_instance.material_override = _make_obstacle_material(Color(1.0, 0.08, 0.38))
 	mesh_instance.mesh = box
 	mesh_instance.set_meta("obstacle_type", obstacle_type)
 

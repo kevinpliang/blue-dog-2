@@ -12,6 +12,8 @@ func run_all() -> Array[String]:
 	expect_equal(TUNING.max_speed, 24.0, "tuning preserves max speed")
 	expect_equal(TUNING.input_buffer_duration, 0.12, "tuning preserves input buffer")
 	expect_equal(TUNING.swipe_width_ratio, 50.0 / 720.0, "tuning preserves swipe threshold")
+	expect_equal(TUNING.obstacle_fade_start, 52.0, "obstacle fade begins beyond gameplay distance")
+	expect_equal(TUNING.obstacle_fade_end, 72.0, "obstacle fade hides the spawn boundary")
 	return failures
 
 

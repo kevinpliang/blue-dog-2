@@ -26,14 +26,14 @@ func _process(_delta: float) -> bool:
 	elif _main.find_child("PlayerLight", true, false) == null:
 		push_error("Main scene does not include a soft player light.")
 		quit(1)
-	elif not _obstacles_emit_color():
-		push_error("Active obstacle materials do not emit their colors.")
-		quit(1)
-	elif not _obstacles_use_tuned_transparency():
-		push_error("Active obstacle materials do not use the tuned transparency.")
+	elif not _obstacles_use_distance_fade():
+		push_error("Active obstacle materials do not use the tuned distance fade.")
 		quit(1)
 	elif not _track_uses_distance_fade():
 		push_error("Track visuals do not use the distance fade shader.")
+		quit(1)
+	elif not _uses_adaptive_fullscreen_layout():
+		push_error("Main scene does not use adaptive full-screen layout.")
 		quit(1)
 	elif _main.find_child("HudSafeArea", true, false) == null:
 		push_error("Main scene does not include a HUD safe-area container.")
@@ -56,20 +56,19 @@ func _process(_delta: float) -> bool:
 	return true
 
 
-func _obstacles_emit_color() -> bool:
+func _obstacles_use_distance_fade() -> bool:
 	for obstacle_node in _main._obstacle_nodes.values():
-		var material: StandardMaterial3D = obstacle_node.material_override
-		if material == null or not material.emission_enabled:
+		if not obstacle_node.material_override is ShaderMaterial:
 			return false
-	return true
-
-
-func _obstacles_use_tuned_transparency() -> bool:
-	for obstacle_node in _main._obstacle_nodes.values():
-		var material: StandardMaterial3D = obstacle_node.material_override
-		if material == null or material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+		var material: ShaderMaterial = obstacle_node.material_override
+		if material.shader == null or material.shader.resource_path != "res://game/shaders/obstacle_distance_fade.gdshader":
 			return false
-		if not is_equal_approx(material.albedo_color.a, MainScript.OBSTACLE_OPACITY):
+		var base_color: Color = material.get_shader_parameter("base_color")
+		if not is_equal_approx(base_color.a, MainScript.OBSTACLE_OPACITY):
+			return false
+		if not is_equal_approx(float(material.get_shader_parameter("fade_start")), MainScript.TUNING.obstacle_fade_start):
+			return false
+		if not is_equal_approx(float(material.get_shader_parameter("fade_end")), MainScript.TUNING.obstacle_fade_end):
 			return false
 	return true
 
@@ -82,4 +81,16 @@ func _track_uses_distance_fade() -> bool:
 		var material: ShaderMaterial = node.material_override
 		if material.shader == null or material.shader.resource_path != "res://game/shaders/distance_fade.gdshader":
 			return false
+	return true
+
+
+func _uses_adaptive_fullscreen_layout() -> bool:
+	if ProjectSettings.get_setting("display/window/stretch/aspect", "") != "expand":
+		return false
+	if _main._camera.keep_aspect != Camera3D.KEEP_WIDTH:
+		return false
+	if not is_zero_approx(_main._score_label.offset_top):
+		return false
+	if not is_zero_approx(_main._high_score_label.offset_top):
+		return false
 	return true
