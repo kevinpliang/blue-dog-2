@@ -38,6 +38,9 @@ func _process(_delta: float) -> bool:
 	elif not _uses_adaptive_fullscreen_layout():
 		push_error("Main scene does not use adaptive full-screen layout.")
 		quit(1)
+	elif not _uses_refreshed_hud():
+		push_error("Main scene does not use the refreshed Michroma HUD.")
+		quit(1)
 	elif not _uses_moderate_lower_third_framing():
 		push_error("Main scene does not use the tuned moderate lower-third framing.")
 		quit(1)
@@ -59,7 +62,7 @@ func _process(_delta: float) -> bool:
 	elif _main.find_child("MultiplierLabel", true, false) == null:
 		push_error("Main scene does not include live multiplier HUD.")
 		quit(1)
-	elif _main.find_child("RunSummaryLabel", true, false) == null:
+	elif _main.find_child("RunSummary", true, false) == null:
 		push_error("Main scene does not include game-over summary.")
 		quit(1)
 	elif not _uses_first_launch_tutorial():
@@ -117,11 +120,58 @@ func _uses_adaptive_fullscreen_layout() -> bool:
 		return false
 	if _main._camera.keep_aspect != Camera3D.KEEP_WIDTH:
 		return false
-	if not is_zero_approx(_main._score_label.offset_top):
-		return false
-	if not is_zero_approx(_main._high_score_label.offset_top):
+	var score_stack: VBoxContainer = _main.find_child("ScoreStack", true, false)
+	if score_stack == null or not is_zero_approx(score_stack.offset_top):
 		return false
 	return true
+
+
+func _uses_refreshed_hud() -> bool:
+	var score_stack: VBoxContainer = _main.find_child("ScoreStack", true, false)
+	var score_label: Label = _main.find_child("ScoreLabel", true, false)
+	var multiplier_label: Label = _main.find_child("MultiplierLabel", true, false)
+	var summary: VBoxContainer = _main.find_child("RunSummary", true, false)
+	var summary_grid: GridContainer = _main.find_child("RunSummaryGrid", true, false)
+	var new_high_score_label: Label = _main.find_child("NewHighScoreLabel", true, false)
+	var high_score_value: Label = _main.find_child("SummaryHighScoreValue", true, false)
+	if score_stack == null or score_label == null or multiplier_label == null:
+		return false
+	if summary == null or summary_grid == null or new_high_score_label == null or high_score_value == null:
+		return false
+	if not score_stack.visible or summary.visible or summary_grid.columns != 2:
+		return false
+	if score_label.text.begins_with("SCORE") or not multiplier_label.visible:
+		return false
+	if score_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_RIGHT:
+		return false
+	if multiplier_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_RIGHT:
+		return false
+	var hud_font: FontFile = _main.get("_hud_font")
+	if hud_font == null or hud_font.data.is_empty() or score_label.get_theme_font("font") != hud_font:
+		return false
+	for label in _main.find_children("*", "Label", true, false):
+		if label.get_theme_font("font") != hud_font:
+			return false
+	if _main.find_child("HighScoreLabel", true, false) != null:
+		return false
+
+	var tutorial_save_path := "user://dog_run_hud_smoke.cfg"
+	var absolute_path := ProjectSettings.globalize_path(tutorial_save_path)
+	DirAccess.remove_absolute(absolute_path)
+	_main._save_path = tutorial_save_path
+	_main.high_score = 1
+	_main.simulation.distance = 20.0
+	_main.simulation.state = _main.simulation.RunState.GAME_OVER
+	_main._finish_run()
+	_main._update_hud()
+	var uses_summary := not score_stack.visible
+	uses_summary = uses_summary and summary.visible and new_high_score_label.visible
+	uses_summary = uses_summary and new_high_score_label.text == "NEW HIGH SCORE"
+	uses_summary = uses_summary and high_score_value.text == str(_main.high_score)
+	_main.simulation.state = _main.simulation.RunState.RUNNING
+	_main._update_hud()
+	DirAccess.remove_absolute(absolute_path)
+	return uses_summary
 
 
 func _uses_moderate_lower_third_framing() -> bool:

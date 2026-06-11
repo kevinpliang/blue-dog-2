@@ -35,15 +35,19 @@ var _player: MeshInstance3D
 var _player_light: OmniLight3D
 var _camera: Camera3D
 var _feedback: FeedbackController
+var _hud_font: FontFile
+var _score_stack: VBoxContainer
 var _score_label: Label
-var _high_score_label: Label
 var _multiplier_label: Label
 var _overlay_label: Label
-var _run_summary_label: Label
+var _run_summary: VBoxContainer
+var _new_high_score_label: Label
+var _run_summary_values := {}
 var _restart_fade: ColorRect
 var _previous_player_x := 0.0
 var _landing_pulse_time := 0.0
 var _player_roll_angle := 0.0
+var _new_high_score := false
 
 
 func _ready() -> void:
@@ -145,6 +149,7 @@ func _handle_tap() -> void:
 		if simulation.state == Simulation.RunState.READY and not _tutorial_completed:
 			_tutorial_completed = true
 			_save_progress()
+		_new_high_score = false
 		simulation.start(int(Time.get_ticks_usec()))
 		_previous_player_x = simulation.current_x
 		_landing_pulse_time = 0.0
@@ -229,6 +234,9 @@ func _build_world() -> void:
 
 
 func _build_hud() -> void:
+	_hud_font = FontFile.new()
+	_hud_font.data = FileAccess.get_file_as_bytes("res://assets/fonts/Michroma-Regular.ttf")
+
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
 
@@ -250,32 +258,27 @@ func _build_hud() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	safe_area.add_child(root)
 
-	_score_label = Label.new()
-	_score_label.offset_left = 24.0
-	_score_label.offset_top = 0.0
-	_score_label.offset_right = 300.0
-	_score_label.offset_bottom = 60.0
-	_style_label(_score_label, 30)
-	root.add_child(_score_label)
+	_score_stack = VBoxContainer.new()
+	_score_stack.name = "ScoreStack"
+	_score_stack.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_score_stack.offset_left = -400.0
+	_score_stack.offset_top = 0.0
+	_score_stack.offset_right = -24.0
+	_score_stack.offset_bottom = 150.0
+	root.add_child(_score_stack)
 
-	_high_score_label = Label.new()
-	_high_score_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_high_score_label.offset_left = -320.0
-	_high_score_label.offset_top = 0.0
-	_high_score_label.offset_right = -24.0
-	_high_score_label.offset_bottom = 60.0
-	_high_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_style_label(_high_score_label, 30)
-	root.add_child(_high_score_label)
+	_score_label = Label.new()
+	_score_label.name = "ScoreLabel"
+	_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_style_label(_score_label, 80)
+	_score_stack.add_child(_score_label)
 
 	_multiplier_label = Label.new()
 	_multiplier_label.name = "MultiplierLabel"
-	_multiplier_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_multiplier_label.offset_top = 60.0
-	_multiplier_label.offset_bottom = 110.0
-	_multiplier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_style_label(_multiplier_label, 28)
-	root.add_child(_multiplier_label)
+	_multiplier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_style_label(_multiplier_label, 24)
+	_multiplier_label.add_theme_color_override("font_color", Color(0.0, 0.85, 1.0))
+	_score_stack.add_child(_multiplier_label)
 
 	_overlay_label = Label.new()
 	_overlay_label.set_anchors_preset(Control.PRESET_CENTER)
@@ -285,27 +288,76 @@ func _build_hud() -> void:
 	_overlay_label.offset_bottom = 90.0
 	_overlay_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_overlay_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_style_label(_overlay_label, 42)
+	_style_label(_overlay_label, 30)
 	root.add_child(_overlay_label)
 
-	_run_summary_label = Label.new()
-	_run_summary_label.name = "RunSummaryLabel"
-	_run_summary_label.set_anchors_preset(Control.PRESET_CENTER)
-	_run_summary_label.offset_left = -300.0
-	_run_summary_label.offset_top = -180.0
-	_run_summary_label.offset_right = 300.0
-	_run_summary_label.offset_bottom = 220.0
-	_run_summary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_run_summary_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_style_label(_run_summary_label, 34)
-	root.add_child(_run_summary_label)
+	_run_summary = VBoxContainer.new()
+	_run_summary.name = "RunSummary"
+	_run_summary.set_anchors_preset(Control.PRESET_CENTER)
+	_run_summary.offset_left = -320.0
+	_run_summary.offset_top = -270.0
+	_run_summary.offset_right = 320.0
+	_run_summary.offset_bottom = 300.0
+	_run_summary.add_theme_constant_override("separation", 18)
+	root.add_child(_run_summary)
+
+	_new_high_score_label = Label.new()
+	_new_high_score_label.name = "NewHighScoreLabel"
+	_new_high_score_label.text = "NEW HIGH SCORE"
+	_new_high_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_style_label(_new_high_score_label, 32)
+	_new_high_score_label.add_theme_color_override("font_color", Color(0.0, 0.85, 1.0))
+	_run_summary.add_child(_new_high_score_label)
+
+	var game_over_label := Label.new()
+	game_over_label.name = "GameOverLabel"
+	game_over_label.text = "GAME OVER"
+	game_over_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_style_label(game_over_label, 38)
+	_run_summary.add_child(game_over_label)
+
+	var summary_grid := GridContainer.new()
+	summary_grid.name = "RunSummaryGrid"
+	summary_grid.columns = 2
+	summary_grid.add_theme_constant_override("h_separation", 36)
+	summary_grid.add_theme_constant_override("v_separation", 10)
+	_run_summary.add_child(summary_grid)
+	_add_summary_row(summary_grid, "distance", "DISTANCE")
+	_add_summary_row(summary_grid, "peak_multiplier", "PEAK MULTIPLIER")
+	_add_summary_row(summary_grid, "near_misses", "NEAR MISSES")
+	_add_summary_row(summary_grid, "score", "SCORE")
+	_add_summary_row(summary_grid, "high_score", "HIGH SCORE")
+
+	var restart_label := Label.new()
+	restart_label.name = "RestartLabel"
+	restart_label.text = "Tap to Restart"
+	restart_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_style_label(restart_label, 24)
+	_run_summary.add_child(restart_label)
 
 func _style_label(label: Label, font_size: int) -> void:
+	label.add_theme_font_override("font", _hud_font)
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", Color.WHITE)
 	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
 	label.add_theme_constant_override("shadow_offset_x", 2)
 	label.add_theme_constant_override("shadow_offset_y", 2)
+
+
+func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> void:
+	var title := Label.new()
+	title.text = title_text
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_label(title, 22)
+	grid.add_child(title)
+
+	var value := Label.new()
+	value.name = "Summary%sValue" % key.to_pascal_case()
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_label(value, 22)
+	grid.add_child(value)
+	_run_summary_values[key] = value
 
 
 func _add_box(size: Vector3, position: Vector3, color: Color, emission := false) -> MeshInstance3D:
@@ -518,11 +570,10 @@ func _obstacle_y(obstacle_type: int) -> float:
 
 
 func _update_hud() -> void:
-	_score_label.text = "SCORE  %d" % simulation.score()
-	_high_score_label.text = "BEST  %d" % high_score
+	_score_label.text = str(simulation.score())
 	_multiplier_label.text = "x%d" % simulation.multiplier
-	_multiplier_label.visible = simulation.state == Simulation.RunState.RUNNING and simulation.multiplier > 1
-	_run_summary_label.visible = false
+	_score_stack.visible = simulation.state == Simulation.RunState.RUNNING
+	_run_summary.visible = false
 
 	match simulation.state:
 		Simulation.RunState.READY:
@@ -530,20 +581,21 @@ func _update_hud() -> void:
 			_overlay_label.visible = true
 		Simulation.RunState.GAME_OVER:
 			_overlay_label.visible = false
-			_run_summary_label.text = "GAME OVER\n\nDistance  %dm\nPeak  x%d\nNear Misses  %d\nScore  %d\n\nTap to Restart" % [
-				simulation.distance_score(),
-				simulation.peak_multiplier,
-				simulation.near_miss_count,
-				simulation.final_score(),
-			]
-			_run_summary_label.visible = true
+			_new_high_score_label.visible = _new_high_score
+			_run_summary_values["distance"].text = "%dm" % simulation.distance_score()
+			_run_summary_values["peak_multiplier"].text = "x%d" % simulation.peak_multiplier
+			_run_summary_values["near_misses"].text = str(simulation.near_miss_count)
+			_run_summary_values["score"].text = str(simulation.final_score())
+			_run_summary_values["high_score"].text = str(high_score)
+			_run_summary.visible = true
 		_:
 			_overlay_label.visible = false
 
 
 func _finish_run() -> void:
 	var updated := Simulation.updated_high_score(high_score, simulation.score())
-	if updated == high_score:
+	_new_high_score = updated > high_score
+	if not _new_high_score:
 		return
 	high_score = updated
 	_save_progress()
