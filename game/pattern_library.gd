@@ -4,6 +4,7 @@ extends RefCounted
 const GROUND := 0
 const OVERHEAD := 1
 const WALL := 2
+const MIN_CONSECUTIVE_WALL_ROW_SPACING := 8.0
 
 
 static func all_patterns() -> Array[Dictionary]:
@@ -14,11 +15,11 @@ static func all_patterns() -> Array[Dictionary]:
 		_pattern("single_wall_center", 0, [_row(0.0, [_obstacle(1, WALL)])]),
 		_pattern("choose_left_then_center", 1, [
 			_row(0.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
-			_row(5.0, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
 		]),
 		_pattern("choose_right_then_center", 1, [
 			_row(0.0, [_obstacle(0, WALL), _obstacle(1, WALL)]),
-			_row(5.0, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
 		]),
 		_pattern("jump_then_lane", 1, [
 			_row(0.0, [_obstacle(1, GROUND)]),
@@ -30,17 +31,17 @@ static func all_patterns() -> Array[Dictionary]:
 		]),
 		_pattern("alternating_walls", 1, [
 			_row(0.0, [_obstacle(0, WALL)]),
-			_row(5.0, [_obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(2, WALL)]),
 		]),
 		_pattern("left_center_right", 2, [
 			_row(0.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
-			_row(5.0, [_obstacle(0, WALL), _obstacle(2, WALL)]),
-			_row(10.0, [_obstacle(0, WALL), _obstacle(1, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, [_obstacle(0, WALL), _obstacle(1, WALL)]),
 		]),
 		_pattern("right_center_left", 2, [
 			_row(0.0, [_obstacle(0, WALL), _obstacle(1, WALL)]),
-			_row(5.0, [_obstacle(0, WALL), _obstacle(2, WALL)]),
-			_row(10.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
 		]),
 		_pattern("jump_choice_duck", 2, [
 			_row(0.0, [_obstacle(0, GROUND)]),
