@@ -153,15 +153,13 @@ func _uses_textured_rolling_player() -> bool:
 		return false
 	if not material.uv1_offset.is_equal_approx(Vector3(-1.5, 0.0, 0.0)):
 		return false
-	if _main._player.basis.x.x > -0.9:
-		return false
-	return not is_zero_approx(_main._player.rotation.x)
+	var roll_angle: Variant = _main.get("_player_roll_angle")
+	return roll_angle is float and not is_zero_approx(float(roll_angle))
 
 
 func _uses_movement_feedback() -> bool:
 	var pivot: Node3D = _main.find_child("PlayerVisualPivot", true, false)
-	var trail: GPUParticles3D = _main.find_child("PlayerSpeedTrail", true, false)
-	if pivot == null or trail == null or trail.local_coords:
+	if pivot == null or _main.find_child("PlayerSpeedTrail", true, false) != null:
 		return false
 	if not _main.has_method("_handle_player_feedback_events"):
 		return false
@@ -186,4 +184,16 @@ func _uses_movement_feedback() -> bool:
 	_main._update_player(MainScript.TUNING.landing_pulse_duration * 0.5)
 	if pivot.scale.x <= 1.0 or pivot.scale.y >= 1.0:
 		return false
-	return trail.amount_ratio > 0.0
+
+	var before_duck_roll: Variant = _main.get("_player_roll_angle")
+	if not before_duck_roll is float:
+		return false
+	_main.simulation.duck()
+	if _main.simulation.duck_time <= 0.0:
+		return false
+	_main._update_player(0.05)
+	var after_duck_roll: float = float(_main.get("_player_roll_angle"))
+	if is_equal_approx(after_duck_roll, float(before_duck_roll)):
+		return false
+	var expected_basis := Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, after_duck_roll)
+	return _main._player.basis.is_equal_approx(expected_basis)

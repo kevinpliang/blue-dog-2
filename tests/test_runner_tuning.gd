@@ -23,10 +23,10 @@ func run_all() -> Array[String]:
 	expect_property_equal(TUNING, "landing_squash_horizontal", 1.12, "landing pulse widens the player")
 	expect_property_equal(TUNING, "landing_squash_vertical", 0.82, "landing pulse shortens the player")
 	expect_property_equal(TUNING, "landing_pulse_duration", 0.16, "landing pulse stays brief")
-	expect_property_equal(TUNING, "speed_trail_min_amount_ratio", 0.15, "speed trail starts subtle")
-	expect_property_equal(TUNING, "speed_trail_max_amount_ratio", 0.65, "speed trail remains restrained")
-	expect_property_equal(TUNING, "speed_trail_min_velocity", 1.5, "speed trail starts slowly")
-	expect_property_equal(TUNING, "speed_trail_max_velocity", 4.0, "speed trail scales with speed")
+	expect_property_missing(TUNING, "speed_trail_min_amount_ratio", "speed trail amount tuning is removed")
+	expect_property_missing(TUNING, "speed_trail_max_amount_ratio", "speed trail amount tuning is removed")
+	expect_property_missing(TUNING, "speed_trail_min_velocity", "speed trail velocity tuning is removed")
+	expect_property_missing(TUNING, "speed_trail_max_velocity", "speed trail velocity tuning is removed")
 	return failures
 
 
@@ -36,6 +36,13 @@ func expect_property_equal(resource: Resource, property_name: String, expected: 
 		failures.append("%s: missing property %s" % [message, property_name])
 		return
 	expect_equal(actual, expected, message)
+
+
+func expect_property_missing(resource: Resource, property_name: String, message: String) -> void:
+	for property in resource.get_property_list():
+		if property["name"] == property_name:
+			failures.append("%s: unexpected property %s" % [message, property_name])
+			return
 
 
 func expect_equal(actual: Variant, expected: Variant, message: String) -> void:
