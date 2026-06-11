@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="RunnerTuning" load_steps=2 format=3]
+
+[ext_resource path="res://game/runner_tuning.gd" type="Script" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+duck_duration = 0.3
+duck_cooldown = 0.05
+start_speed = 12.0
+max_speed = 24.0
+speed_acceleration = 0.35
+lane_change_speed = 16.0
+jump_velocity = 9.5
+gravity = 24.0
+input_buffer_duration = 0.12
+swipe_width_ratio = 0.06944444444444445
+track_fade_start = 70.0
+track_fade_end = 145.0
+shake_duration = 0.18
+shake_strength = 0.12
+audio_enabled = true
+haptics_enabled = true

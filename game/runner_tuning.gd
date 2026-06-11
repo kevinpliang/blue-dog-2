@@ -1,0 +1,19 @@
+class_name RunnerTuning
+extends Resource
+
+@export var duck_duration := 0.3
+@export var duck_cooldown := 0.05
+@export var start_speed := 12.0
+@export var max_speed := 24.0
+@export var speed_acceleration := 0.35
+@export var lane_change_speed := 16.0
+@export var jump_velocity := 9.5
+@export var gravity := 24.0
+@export var input_buffer_duration := 0.12
+@export var swipe_width_ratio := 50.0 / 720.0
+@export var track_fade_start := 70.0
+@export var track_fade_end := 145.0
+@export var shake_duration := 0.18
+@export var shake_strength := 0.12
+@export var audio_enabled := true
+@export var haptics_enabled := true

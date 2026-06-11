@@ -2,6 +2,7 @@ class_name FeedbackController
 extends Node3D
 
 const AudioCueLibrary = preload("res://game/audio_cue_library.gd")
+const TUNING = preload("res://game/default_runner_tuning.tres")
 
 const IMPACT_POOL_SIZE := 4
 const AUDIO_POOL_SIZE := 8
@@ -30,7 +31,7 @@ func _process(delta: float) -> void:
 		return
 	shake_time = maxf(0.0, shake_time - delta)
 	if shake_time > 0.0:
-		var strength := SHAKE_STRENGTH * shake_time / SHAKE_DURATION
+		var strength := TUNING.shake_strength * shake_time / TUNING.shake_duration
 		_camera.position = _camera_base_position + Vector3(
 			sin(shake_time * 93.0) * strength,
 			cos(shake_time * 77.0) * strength,
@@ -44,6 +45,7 @@ func prepare() -> void:
 	while _particles.size() < IMPACT_POOL_SIZE:
 		var particles := GPUParticles3D.new()
 		particles.one_shot = true
+		particles.emitting = false
 		particles.amount = 18
 		particles.lifetime = 0.35
 		var process_material := ParticleProcessMaterial.new()
@@ -77,7 +79,7 @@ func handle_events(events: Array[Dictionary], player_position: Vector3) -> void:
 		var type: String = event["type"]
 		match type:
 			"collision":
-				shake_time = SHAKE_DURATION
+				shake_time = TUNING.shake_duration
 				_spawn_impact(player_position)
 				_vibrate(90)
 			"near_miss":
@@ -99,6 +101,13 @@ func audio_pool_size() -> int:
 	return _audio_players.size()
 
 
+func particles_are_idle() -> bool:
+	for particles in _particles:
+		if particles.emitting:
+			return false
+	return true
+
+
 func _spawn_impact(position: Vector3) -> void:
 	if _particles.is_empty():
 		return
@@ -110,7 +119,7 @@ func _spawn_impact(position: Vector3) -> void:
 
 
 func _play_cue(type: String) -> void:
-	if not AUDIO_ENABLED or _audio_players.is_empty():
+	if not TUNING.audio_enabled or _audio_players.is_empty():
 		return
 	var cue := _audio_library.cue(type)
 	if cue == null:
@@ -123,5 +132,5 @@ func _play_cue(type: String) -> void:
 
 
 func _vibrate(milliseconds: int) -> void:
-	if HAPTICS_ENABLED and OS.has_feature("mobile"):
+	if TUNING.haptics_enabled and OS.has_feature("mobile"):
 		Input.vibrate_handheld(milliseconds)

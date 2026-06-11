@@ -3,6 +3,7 @@ extends RefCounted
 
 const PatternLibrary = preload("res://game/pattern_library.gd")
 const ReachabilityValidator = preload("res://game/reachability_validator.gd")
+const TUNING = preload("res://game/default_runner_tuning.tres")
 
 enum RunState { READY, RUNNING, IMPACT, GAME_OVER }
 enum ObstacleType { GROUND_BLOCK, OVERHEAD_BAR, WALL }
@@ -61,7 +62,7 @@ func start(seed_value: int) -> void:
 	jump_buffer_time = 0.0
 	duck_buffer_time = 0.0
 	impact_time = 0.0
-	speed = START_SPEED
+	speed = TUNING.start_speed
 	distance = 0.0
 	clear_streak = 0
 	multiplier = 1
@@ -88,10 +89,10 @@ func step(delta: float) -> void:
 	if state != RunState.RUNNING:
 		return
 
-	speed = minf(MAX_SPEED, speed + SPEED_ACCELERATION * delta)
+	speed = minf(TUNING.max_speed, speed + TUNING.speed_acceleration * delta)
 	var travel := speed * delta
 	distance += travel
-	current_x = move_toward(current_x, lane_x(target_lane), LANE_CHANGE_SPEED * delta)
+	current_x = move_toward(current_x, lane_x(target_lane), TUNING.lane_change_speed * delta)
 	var was_grounded := is_grounded()
 	_update_vertical_motion(delta)
 	if not was_grounded and is_grounded():
@@ -132,7 +133,7 @@ func jump() -> void:
 	if state != RunState.RUNNING:
 		return
 	if not is_grounded():
-		jump_buffer_time = INPUT_BUFFER_DURATION
+		jump_buffer_time = TUNING.input_buffer_duration
 		return
 	_start_jump()
 
@@ -140,7 +141,7 @@ func jump() -> void:
 func _start_jump() -> void:
 	duck_time = 0.0
 	jump_buffer_time = 0.0
-	vertical_velocity = JUMP_VELOCITY
+	vertical_velocity = TUNING.jump_velocity
 	_emit_event("jumped")
 
 
@@ -148,15 +149,15 @@ func duck() -> void:
 	if state != RunState.RUNNING:
 		return
 	if not is_grounded() or duck_cooldown_time > 0.0:
-		duck_buffer_time = INPUT_BUFFER_DURATION
+		duck_buffer_time = TUNING.input_buffer_duration
 		return
 	_start_duck()
 
 
 func _start_duck() -> void:
 	duck_buffer_time = 0.0
-	duck_time = DUCK_DURATION
-	duck_cooldown_time = DUCK_DURATION + DUCK_COOLDOWN
+	duck_time = TUNING.duck_duration
+	duck_cooldown_time = TUNING.duck_duration + TUNING.duck_cooldown
 	_emit_event("ducked")
 
 
@@ -228,7 +229,7 @@ func _update_vertical_motion(delta: float) -> void:
 		vertical_velocity = 0.0
 		return
 
-	vertical_velocity -= GRAVITY * delta
+	vertical_velocity -= TUNING.gravity * delta
 	player_y += vertical_velocity * delta
 	if player_y <= 0.0:
 		player_y = 0.0

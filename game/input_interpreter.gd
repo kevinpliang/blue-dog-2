@@ -4,11 +4,12 @@ extends RefCounted
 enum Command { TAP, LEFT, RIGHT, JUMP, DUCK }
 
 const SWIPE_WIDTH_RATIO := 50.0 / 720.0
+const TUNING = preload("res://game/default_runner_tuning.tres")
 
 
 func interpret(start: Vector2, finish: Vector2, viewport_size: Vector2) -> Command:
 	var swipe := finish - start
-	var threshold := viewport_size.x * SWIPE_WIDTH_RATIO
+	var threshold := viewport_size.x * TUNING.swipe_width_ratio
 	if swipe.length() < threshold:
 		return Command.TAP
 	if absf(swipe.x) > absf(swipe.y):

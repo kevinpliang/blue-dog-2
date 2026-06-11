@@ -3,11 +3,16 @@ extends Node3D
 const Simulation = preload("res://game/runner_simulation.gd")
 const InputInterpreter = preload("res://game/input_interpreter.gd")
 const FeedbackController = preload("res://game/feedback_controller.gd")
+const PerformanceMonitor = preload("res://game/performance_monitor.gd")
+const LimitsScript = preload("res://game/runtime_limits.gd")
+const TUNING = preload("res://game/default_runner_tuning.tres")
 const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader")
 const SAVE_PATH := "user://dog_run.cfg"
+const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
+var performance_monitor = PerformanceMonitor.new()
 var high_score := 0
 var _app_paused := false
 var _pointer_start := Vector2.ZERO
@@ -45,7 +50,7 @@ func _process(delta: float) -> void:
 
 	_handle_keyboard()
 	var previous_state: int = simulation.state
-	simulation.step(delta)
+	advance_simulation(delta)
 	_feedback.handle_events(simulation.drain_events(), _player.position)
 	if previous_state != simulation.state and simulation.state == Simulation.RunState.GAME_OVER:
 		_finish_run()
@@ -53,6 +58,15 @@ func _process(delta: float) -> void:
 	_update_player(delta)
 	_sync_obstacles()
 	_update_hud()
+	performance_monitor.sample(delta, _obstacle_nodes.size())
+	var report := performance_monitor.take_report()
+	if not report.is_empty() and OS.is_debug_build() and DisplayServer.get_name() != "headless":
+		print("DogRun perf: avg=%.1fms worst=%.1fms slow=%d obstacles=%d" % [
+			report["average_ms"],
+			report["worst_ms"],
+			report["slow_frames"],
+			report["obstacles"],
+		])
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -84,6 +98,11 @@ func set_app_paused(value: bool) -> void:
 	_app_paused = value
 	if _feedback != null:
 		_feedback.set_feedback_paused(value)
+
+
+func advance_simulation(delta: float) -> void:
+	if not _app_paused:
+		simulation.step(delta)
 
 
 func _handle_pointer_release(end_position: Vector2) -> void:
@@ -280,6 +299,8 @@ func _add_fading_box(node_name: String, size: Vector3, position: Vector3, color:
 	box.size = size
 	material.shader = DISTANCE_FADE_SHADER
 	material.set_shader_parameter("base_color", color)
+	material.set_shader_parameter("fade_start", TUNING.track_fade_start)
+	material.set_shader_parameter("fade_end", TUNING.track_fade_end)
 	mesh_instance.name = node_name
 	mesh_instance.mesh = box
 	mesh_instance.position = position
@@ -291,15 +312,17 @@ func _add_fading_box(node_name: String, size: Vector3, position: Vector3, color:
 func _apply_safe_area_margins(container: MarginContainer) -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	var safe_rect := DisplayServer.get_display_safe_area()
+	var screen_size := DisplayServer.screen_get_size()
 	var left := 24
 	var top := 20
 	var right := 24
 	var bottom := 20
-	if safe_rect.size.x > 0 and safe_rect.size.y > 0:
-		left = maxi(left, safe_rect.position.x)
-		top = maxi(top, safe_rect.position.y)
-		right = maxi(right, int(viewport_size.x) - safe_rect.end.x)
-		bottom = maxi(bottom, int(viewport_size.y) - safe_rect.end.y)
+	if OS.has_feature("mobile") and safe_rect.size.x > 0 and safe_rect.size.y > 0 and screen_size.x > 0 and screen_size.y > 0:
+		var scale := Vector2(viewport_size.x / screen_size.x, viewport_size.y / screen_size.y)
+		left = maxi(left, int(safe_rect.position.x * scale.x))
+		top = maxi(top, int(safe_rect.position.y * scale.y))
+		right = maxi(right, int((screen_size.x - safe_rect.end.x) * scale.x))
+		bottom = maxi(bottom, int((screen_size.y - safe_rect.end.y) * scale.y))
 	container.add_theme_constant_override("margin_left", left)
 	container.add_theme_constant_override("margin_top", top)
 	container.add_theme_constant_override("margin_right", right)
@@ -348,6 +371,8 @@ func _sync_obstacles() -> void:
 			mesh_instance = _obstacle_nodes[obstacle_id]
 		else:
 			mesh_instance = _acquire_obstacle()
+			if mesh_instance == null:
+				continue
 			_obstacle_nodes[obstacle_id] = mesh_instance
 
 		if not mesh_instance.has_meta("obstacle_type") or int(mesh_instance.get_meta("obstacle_type")) != obstacle_type:
@@ -371,6 +396,8 @@ func _sync_obstacles() -> void:
 func _acquire_obstacle() -> MeshInstance3D:
 	if not _obstacle_pool.is_empty():
 		return _obstacle_pool.pop_back()
+	if _obstacle_nodes.size() + _obstacle_pool.size() >= MAX_OBSTACLE_NODES:
+		return null
 	var mesh_instance := MeshInstance3D.new()
 	add_child(mesh_instance)
 	return mesh_instance
