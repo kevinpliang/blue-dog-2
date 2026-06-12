@@ -3,6 +3,7 @@ extends Resource
 
 @export var duck_duration := 0.3
 @export var duck_cooldown := 0.05
+@export var air_duck_dive_duration := 0.12
 @export var start_speed := 12.0
 @export var max_speed := 24.0
 @export var speed_acceleration := 0.35

@@ -8,6 +8,7 @@ var failures: Array[String] = []
 func run_all() -> Array[String]:
 	expect_equal(TUNING.duck_duration, 0.3, "tuning preserves duck duration")
 	expect_equal(TUNING.duck_cooldown, 0.05, "tuning preserves duck cooldown")
+	expect_property_equal(TUNING, "air_duck_dive_duration", 0.12, "airborne duck dive stays brief")
 	expect_equal(TUNING.start_speed, 12.0, "tuning preserves start speed")
 	expect_equal(TUNING.max_speed, 24.0, "tuning preserves max speed")
 	expect_equal(TUNING.input_buffer_duration, 0.12, "tuning preserves input buffer")

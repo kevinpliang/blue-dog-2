@@ -4,3 +4,4 @@
 
 [resource]
 script = ExtResource("1_tuning")
+air_duck_dive_duration = 0.12
