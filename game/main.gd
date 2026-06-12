@@ -469,6 +469,8 @@ func _update_player(delta: float) -> void:
 
 	if simulation.state == Simulation.RunState.IMPACT:
 		_player_visual_pivot.scale = Vector3.ONE * 1.15
+	elif simulation.is_air_ducking():
+		_player_visual_pivot.scale = Vector3(1.0, 0.55, 1.0)
 	elif simulation.duck_time > 0.0:
 		_player_visual_pivot.scale = Vector3(1.0, 0.55, 1.0)
 		_player_visual_pivot.position.y = 0.43

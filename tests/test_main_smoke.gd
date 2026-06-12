@@ -50,6 +50,9 @@ func _process(_delta: float) -> bool:
 	elif not _uses_movement_feedback():
 		push_error("Main scene does not include tuned player movement feedback.")
 		quit(1)
+	elif not _uses_airborne_duck_visual():
+		push_error("Main scene does not show the compact airborne duck roll.")
+		quit(1)
 	elif _main.find_child("HudSafeArea", true, false) == null:
 		push_error("Main scene does not include a HUD safe-area container.")
 		quit(1)
@@ -252,6 +255,22 @@ func _uses_movement_feedback() -> bool:
 		return false
 	var expected_basis := Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, after_duck_roll)
 	return _main._player.basis.is_equal_approx(expected_basis)
+
+
+func _uses_airborne_duck_visual() -> bool:
+	var pivot: Node3D = _main.find_child("PlayerVisualPivot", true, false)
+	if pivot == null:
+		return false
+	_main.simulation.player_y = 1.0
+	_main.simulation.vertical_velocity = 1.0
+	_main.simulation.air_duck_time = MainScript.TUNING.air_duck_dive_duration
+	_main._update_player(0.01)
+	var uses_compact_pose := pivot.scale.y < 1.0
+	var stays_airborne := pivot.position.y > 0.75
+	_main.simulation.player_y = 0.0
+	_main.simulation.vertical_velocity = 0.0
+	_main.simulation.air_duck_time = 0.0
+	return uses_compact_pose and stays_airborne
 
 
 func _uses_first_launch_tutorial() -> bool:
