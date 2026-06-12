@@ -317,7 +317,16 @@ func _spawn_next_pattern(z_position: float) -> void:
 
 
 func _row_spacing() -> float:
-	return maxf(9.0, 15.0 - speed * 0.25)
+	var normal_spacing := maxf(
+		TUNING.minimum_pattern_spacing,
+		TUNING.normal_pattern_spacing_base - speed * TUNING.normal_pattern_spacing_speed_factor
+	)
+	var early_ratio := clampf(
+		distance / maxf(TUNING.early_spacing_end_distance, 0.001),
+		0.0,
+		1.0
+	)
+	return lerpf(TUNING.early_pattern_spacing, normal_spacing, early_ratio)
 
 
 func _has_collision() -> bool:

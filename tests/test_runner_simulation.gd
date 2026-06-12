@@ -16,6 +16,7 @@ func run_all() -> Array[String]:
 	test_early_jump_runs_on_landing()
 	test_early_duck_runs_after_cooldown()
 	test_speed_caps_and_score_tracks_distance()
+	test_pattern_spacing_eases_into_normal_frequency()
 	test_seeded_generation_is_deterministic_and_fair()
 	test_difficulty_tiers_unlock_by_distance()
 	test_generation_uses_curated_patterns()
@@ -201,6 +202,24 @@ func test_speed_caps_and_score_tracks_distance() -> void:
 	expect_equal(simulation.score(), int(floor(simulation.distance)), "score is whole meters")
 
 
+func test_pattern_spacing_eases_into_normal_frequency() -> void:
+	var simulation = Simulation.new()
+	simulation.speed = simulation.TUNING.start_speed
+
+	simulation.distance = 0.0
+	expect_float_equal(simulation._row_spacing(), 18.0, "run starts with wider pattern spacing")
+
+	simulation.distance = simulation.TUNING.early_spacing_end_distance * 0.5
+	expect_float_equal(simulation._row_spacing(), 15.0, "early pattern spacing transitions smoothly")
+
+	simulation.distance = simulation.TUNING.early_spacing_end_distance
+	expect_float_equal(simulation._row_spacing(), 12.0, "tier one uses the normal speed-based spacing")
+
+	simulation.distance = simulation.TUNING.early_spacing_end_distance * 2.0
+	simulation.speed = simulation.TUNING.max_speed
+	expect_float_equal(simulation._row_spacing(), 9.0, "normal spacing preserves its minimum")
+
+
 func test_seeded_generation_is_deterministic_and_fair() -> void:
 	var first = Simulation.new()
 	var second = Simulation.new()
@@ -292,6 +311,11 @@ func expect_true(value: bool, message: String) -> void:
 
 func expect_equal(actual: Variant, expected: Variant, message: String) -> void:
 	if actual != expected:
+		failures.append("%s: expected %s, got %s" % [message, expected, actual])
+
+
+func expect_float_equal(actual: float, expected: float, message: String) -> void:
+	if not is_equal_approx(actual, expected):
 		failures.append("%s: expected %s, got %s" % [message, expected, actual])
 
 
