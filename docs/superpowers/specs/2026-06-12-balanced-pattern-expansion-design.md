@@ -23,4 +23,3 @@ Add more varied obstacle sequences that balance lane changes, jumps, ducks, rout
 - Keep at least `8m` between consecutive wall rows.
 - Validate every new pattern at maximum speed.
 - Keep airborne ducking out of scope; jump-to-duck spacing allows the player to land first.
-

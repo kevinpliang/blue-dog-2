@@ -29,4 +29,3 @@
 - [ ] Add four tier-2 recovery-aware and lane-weave patterns.
 - [ ] Run simulation, active-scene, and mobile-input suites.
 - [ ] Commit and push the verified pattern expansion.
-
