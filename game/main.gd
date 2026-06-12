@@ -40,6 +40,7 @@ var _hud_font: FontFile
 var _score_stack: VBoxContainer
 var _score_label: Label
 var _multiplier_label: Label
+var _start_title_label: Label
 var _overlay_label: Label
 var _run_summary: VBoxContainer
 var _new_high_score_label: Label
@@ -279,6 +280,19 @@ func _build_hud() -> void:
 	_style_label(_multiplier_label, 24)
 	_multiplier_label.add_theme_color_override("font_color", Color(0.0, 0.85, 1.0))
 	_score_stack.add_child(_multiplier_label)
+
+	_start_title_label = Label.new()
+	_start_title_label.name = "StartTitleLabel"
+	_start_title_label.text = "DOG RUN"
+	_start_title_label.set_anchors_preset(Control.PRESET_CENTER)
+	_start_title_label.offset_left = -300.0
+	_start_title_label.offset_top = -110.0
+	_start_title_label.offset_right = 300.0
+	_start_title_label.offset_bottom = -30.0
+	_start_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_start_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_style_label(_start_title_label, 72)
+	root.add_child(_start_title_label)
 
 	_overlay_label = Label.new()
 	_overlay_label.set_anchors_preset(Control.PRESET_CENTER)
@@ -582,10 +596,12 @@ func _update_hud() -> void:
 	_multiplier_label.text = "x%d" % simulation.multiplier
 	_score_stack.visible = simulation.state == Simulation.RunState.RUNNING
 	_run_summary.visible = false
+	_start_title_label.visible = false
 
 	match simulation.state:
 		Simulation.RunState.READY:
-			_overlay_label.text = FIRST_LAUNCH_TUTORIAL_TEXT if not _tutorial_completed else "DOG RUN\nTap to Start"
+			_start_title_label.visible = _tutorial_completed
+			_overlay_label.text = FIRST_LAUNCH_TUTORIAL_TEXT if not _tutorial_completed else "Tap to Start"
 			_overlay_label.visible = true
 		Simulation.RunState.GAME_OVER:
 			_overlay_label.visible = false

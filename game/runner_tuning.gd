@@ -7,11 +7,13 @@ extends Resource
 @export var start_speed := 12.0
 @export var max_speed := 24.0
 @export var speed_acceleration := 0.35
-@export var early_pattern_spacing := 18.0
+@export var early_pattern_spacing := 24.0
 @export var early_spacing_end_distance := 250.0
-@export var normal_pattern_spacing_base := 15.0
+@export var normal_pattern_spacing_base := 16.0
 @export var normal_pattern_spacing_speed_factor := 0.25
 @export var minimum_pattern_spacing := 9.0
+@export var tier_one_unlock_distance := 250.0
+@export var tier_two_unlock_distance := 650.0
 @export var lane_change_speed := 32.0
 @export var jump_velocity := 9.5
 @export var gravity := 24.0

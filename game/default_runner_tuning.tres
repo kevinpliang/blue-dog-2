@@ -4,9 +4,3 @@
 
 [resource]
 script = ExtResource("1_tuning")
-air_duck_dive_duration = 0.12
-early_pattern_spacing = 18.0
-early_spacing_end_distance = 250.0
-normal_pattern_spacing_base = 15.0
-normal_pattern_spacing_speed_factor = 0.25
-minimum_pattern_spacing = 9.0

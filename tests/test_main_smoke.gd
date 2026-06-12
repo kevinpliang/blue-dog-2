@@ -278,15 +278,42 @@ func _uses_first_launch_tutorial() -> bool:
 	var absolute_path := ProjectSettings.globalize_path(tutorial_save_path)
 	DirAccess.remove_absolute(absolute_path)
 	_main._save_path = tutorial_save_path
+	var start_title: Label = _main.find_child("StartTitleLabel", true, false)
+	if start_title == null:
+		return false
 	_main._tutorial_completed = false
 	_main.simulation.state = _main.simulation.RunState.READY
 	_main._update_hud()
-	if _main._overlay_label.text != MainScript.FIRST_LAUNCH_TUTORIAL_TEXT:
+	if start_title.visible or _main._overlay_label.text != MainScript.FIRST_LAUNCH_TUTORIAL_TEXT:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if _main._overlay_label.get_theme_font_size("font_size") != 30:
 		DirAccess.remove_absolute(absolute_path)
 		return false
 
+	_main._tutorial_completed = true
+	_main._update_hud()
+	if not start_title.visible or start_title.text != "DOG RUN":
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if start_title.get_theme_font_size("font_size") != 44 or _main._overlay_label.text != "Tap to Start":
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main._tutorial_completed = false
+	_main._update_hud()
 	_main._handle_tap()
 	if not _main._tutorial_completed or _main.simulation.state != _main.simulation.RunState.RUNNING:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	_main._update_hud()
+	if start_title.visible or _main._overlay_label.visible:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main.simulation.state = _main.simulation.RunState.GAME_OVER
+	_main._update_hud()
+	if start_title.visible or _main._overlay_label.visible:
 		DirAccess.remove_absolute(absolute_path)
 		return false
 

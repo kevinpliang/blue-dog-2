@@ -20,8 +20,6 @@ const DUCK_COOLDOWN := 0.05
 const INPUT_BUFFER_DURATION := 0.12
 const IMPACT_DURATION := 0.3
 const SPAWN_LIMIT_Z := -80.0
-const TIER_ONE_DISTANCE := 250.0
-const TIER_TWO_DISTANCE := 650.0
 
 var state: RunState = RunState.READY
 var target_lane := 1
@@ -244,9 +242,9 @@ func lane_x(lane: int) -> float:
 
 
 func difficulty_tier_at_distance(value: float) -> int:
-	if value >= TIER_TWO_DISTANCE:
+	if value >= TUNING.tier_two_unlock_distance:
 		return 2
-	if value >= TIER_ONE_DISTANCE:
+	if value >= TUNING.tier_one_unlock_distance:
 		return 1
 	return 0
 

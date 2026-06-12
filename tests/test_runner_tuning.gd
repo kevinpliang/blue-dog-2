@@ -11,11 +11,14 @@ func run_all() -> Array[String]:
 	expect_property_equal(TUNING, "air_duck_dive_duration", 0.12, "airborne duck dive stays brief")
 	expect_equal(TUNING.start_speed, 12.0, "tuning preserves start speed")
 	expect_equal(TUNING.max_speed, 24.0, "tuning preserves max speed")
-	expect_property_equal(TUNING, "early_pattern_spacing", 18.0, "early patterns begin farther apart")
-	expect_property_equal(TUNING, "early_spacing_end_distance", 250.0, "early spacing reaches normal at tier one")
-	expect_property_equal(TUNING, "normal_pattern_spacing_base", 15.0, "normal spacing preserves its base")
+	expect_property_positive(TUNING, "early_pattern_spacing", "early pattern spacing is tunable")
+	expect_property_positive(TUNING, "early_spacing_end_distance", "early spacing end distance is tunable")
+	expect_property_positive(TUNING, "normal_pattern_spacing_base", "normal pattern spacing base is tunable")
 	expect_property_equal(TUNING, "normal_pattern_spacing_speed_factor", 0.25, "normal spacing preserves speed scaling")
 	expect_property_equal(TUNING, "minimum_pattern_spacing", 9.0, "pattern spacing preserves its minimum")
+	expect_property_positive(TUNING, "tier_one_unlock_distance", "tier one unlock distance is tunable")
+	expect_property_positive(TUNING, "tier_two_unlock_distance", "tier two unlock distance is tunable")
+	expect_true(TUNING.tier_two_unlock_distance > TUNING.tier_one_unlock_distance, "tier two unlocks after tier one")
 	expect_equal(TUNING.input_buffer_duration, 0.12, "tuning preserves input buffer")
 	expect_equal(TUNING.swipe_width_ratio, 50.0 / 720.0, "tuning preserves swipe threshold")
 	expect_equal(TUNING.obstacle_fade_start, 52.0, "obstacle fade begins beyond gameplay distance")
@@ -44,6 +47,12 @@ func expect_property_equal(resource: Resource, property_name: String, expected: 
 	expect_equal(actual, expected, message)
 
 
+func expect_property_positive(resource: Resource, property_name: String, message: String) -> void:
+	var actual: Variant = resource.get(property_name)
+	if actual == null or float(actual) <= 0.0:
+		failures.append("%s: expected positive property %s, got %s" % [message, property_name, actual])
+
+
 func expect_property_missing(resource: Resource, property_name: String, message: String) -> void:
 	for property in resource.get_property_list():
 		if property["name"] == property_name:
@@ -54,3 +63,8 @@ func expect_property_missing(resource: Resource, property_name: String, message:
 func expect_equal(actual: Variant, expected: Variant, message: String) -> void:
 	if not is_equal_approx(float(actual), float(expected)):
 		failures.append("%s: expected %s, got %s" % [message, expected, actual])
+
+
+func expect_true(value: bool, message: String) -> void:
+	if not value:
+		failures.append(message)

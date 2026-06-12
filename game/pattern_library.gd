@@ -12,7 +12,7 @@ const MIN_DUCK_TO_JUMP_SPACING := 9.0
 static func all_patterns() -> Array[Dictionary]:
 	# Add patterns with _pattern(id, tier, rows):
 	# - id: unique descriptive name stored on spawned obstacles.
-	# - tier: difficulty level when the pattern unlocks (0 = start, 1 = 250m, 2 = 650m).
+	# - tier: difficulty level when the pattern unlocks; tier distances live in RunnerTuning.
 	# - rows: ordered obstacle groups built with _row(offset, obstacles).
 	# - offset: meters after the pattern's first row; offsets must increase.
 	# - obstacles: entries built with _obstacle(lane, type).

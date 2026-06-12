@@ -207,17 +207,29 @@ func test_pattern_spacing_eases_into_normal_frequency() -> void:
 	simulation.speed = simulation.TUNING.start_speed
 
 	simulation.distance = 0.0
-	expect_float_equal(simulation._row_spacing(), 18.0, "run starts with wider pattern spacing")
+	expect_float_equal(simulation._row_spacing(), simulation.TUNING.early_pattern_spacing, "run starts with tuned wider pattern spacing")
 
 	simulation.distance = simulation.TUNING.early_spacing_end_distance * 0.5
-	expect_float_equal(simulation._row_spacing(), 15.0, "early pattern spacing transitions smoothly")
+	var start_speed_spacing := maxf(
+		simulation.TUNING.minimum_pattern_spacing,
+		simulation.TUNING.normal_pattern_spacing_base - simulation.speed * simulation.TUNING.normal_pattern_spacing_speed_factor
+	)
+	expect_float_equal(
+		simulation._row_spacing(),
+		lerpf(simulation.TUNING.early_pattern_spacing, start_speed_spacing, 0.5),
+		"early pattern spacing transitions smoothly"
+	)
 
 	simulation.distance = simulation.TUNING.early_spacing_end_distance
-	expect_float_equal(simulation._row_spacing(), 12.0, "tier one uses the normal speed-based spacing")
+	expect_float_equal(simulation._row_spacing(), start_speed_spacing, "spacing end distance uses normal speed-based spacing")
 
 	simulation.distance = simulation.TUNING.early_spacing_end_distance * 2.0
 	simulation.speed = simulation.TUNING.max_speed
-	expect_float_equal(simulation._row_spacing(), 9.0, "normal spacing preserves its minimum")
+	var max_speed_spacing := maxf(
+		simulation.TUNING.minimum_pattern_spacing,
+		simulation.TUNING.normal_pattern_spacing_base - simulation.speed * simulation.TUNING.normal_pattern_spacing_speed_factor
+	)
+	expect_float_equal(simulation._row_spacing(), max_speed_spacing, "normal spacing preserves its tuned minimum")
 
 
 func test_seeded_generation_is_deterministic_and_fair() -> void:
@@ -242,8 +254,9 @@ func test_seeded_generation_is_deterministic_and_fair() -> void:
 func test_difficulty_tiers_unlock_by_distance() -> void:
 	var simulation = Simulation.new()
 	expect_equal(simulation.difficulty_tier_at_distance(0.0), 0, "run starts at tier zero")
-	expect_equal(simulation.difficulty_tier_at_distance(250.0), 1, "middle distance unlocks tier one")
-	expect_equal(simulation.difficulty_tier_at_distance(650.0), 2, "long distance unlocks tier two")
+	expect_equal(simulation.difficulty_tier_at_distance(simulation.TUNING.tier_one_unlock_distance - 0.01), 0, "tier zero lasts until the tuned tier one distance")
+	expect_equal(simulation.difficulty_tier_at_distance(simulation.TUNING.tier_one_unlock_distance), 1, "tuned middle distance unlocks tier one")
+	expect_equal(simulation.difficulty_tier_at_distance(simulation.TUNING.tier_two_unlock_distance), 2, "tuned long distance unlocks tier two")
 
 
 func test_generation_uses_curated_patterns() -> void:
