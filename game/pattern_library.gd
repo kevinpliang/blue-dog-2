@@ -5,6 +5,8 @@ const GROUND := 0
 const OVERHEAD := 1
 const WALL := 2
 const MIN_CONSECUTIVE_WALL_ROW_SPACING := 8.0
+const MIN_JUMP_TO_DUCK_SPACING := 20.0
+const MIN_DUCK_TO_JUMP_SPACING := 9.0
 
 
 static func all_patterns() -> Array[Dictionary]:
@@ -42,6 +44,20 @@ static func all_patterns() -> Array[Dictionary]:
 			_row(0.0, [_obstacle(0, WALL)]),
 			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(2, WALL)]),
 		]),
+		_pattern("jump_wall_duck_gate", 1, [
+			_row(0.0, [_obstacle(0, GROUND), _obstacle(1, WALL), _obstacle(2, OVERHEAD)]),
+		]),
+		_pattern("duck_wall_jump_gate", 1, [
+			_row(0.0, [_obstacle(0, OVERHEAD), _obstacle(1, WALL), _obstacle(2, GROUND)]),
+		]),
+		_pattern("jump_gate_then_left", 1, [
+			_row(0.0, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(1, WALL), _obstacle(2, WALL)]),
+		]),
+		_pattern("duck_gate_then_right", 1, [
+			_row(0.0, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(1, WALL)]),
+		]),
 		_pattern("left_center_right", 2, [
 			_row(0.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
 			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
@@ -66,6 +82,24 @@ static func all_patterns() -> Array[Dictionary]:
 			_row(0.0, [_obstacle(0, GROUND), _obstacle(2, WALL)]),
 			_row(6.0, [_obstacle(1, OVERHEAD)]),
 			_row(12.0, [_obstacle(0, WALL), _obstacle(2, GROUND)]),
+		]),
+		_pattern("jump_then_duck_gate", 2, [
+			_row(0.0, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+			_row(MIN_JUMP_TO_DUCK_SPACING, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
+		]),
+		_pattern("duck_then_jump_gate", 2, [
+			_row(0.0, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
+			_row(MIN_DUCK_TO_JUMP_SPACING, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+		]),
+		_pattern("weave_left_center_jump", 2, [
+			_row(0.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+		]),
+		_pattern("weave_right_center_duck", 2, [
+			_row(0.0, [_obstacle(0, WALL), _obstacle(1, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
 		]),
 	]
 
