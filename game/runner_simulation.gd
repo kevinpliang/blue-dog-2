@@ -30,6 +30,8 @@ var player_y := 0.0
 var vertical_velocity := 0.0
 var duck_time := 0.0
 var duck_cooldown_time := 0.0
+var air_duck_time := 0.0
+var air_duck_landing_roll := false
 var jump_buffer_time := 0.0
 var duck_buffer_time := 0.0
 var impact_time := 0.0
@@ -59,6 +61,8 @@ func start(seed_value: int) -> void:
 	vertical_velocity = 0.0
 	duck_time = 0.0
 	duck_cooldown_time = 0.0
+	air_duck_time = 0.0
+	air_duck_landing_roll = false
 	jump_buffer_time = 0.0
 	duck_buffer_time = 0.0
 	impact_time = 0.0
@@ -94,14 +98,20 @@ func step(delta: float) -> void:
 	distance += travel
 	current_x = move_toward(current_x, lane_x(target_lane), TUNING.lane_change_speed * delta)
 	var was_grounded := is_grounded()
+	var was_air_ducking := is_air_ducking()
 	_update_vertical_motion(delta)
-	if not was_grounded and is_grounded():
+	var landed := not was_grounded and is_grounded()
+	if landed:
 		_emit_event("landed")
 	duck_time = maxf(0.0, duck_time - delta)
+	if duck_time <= 0.0:
+		air_duck_landing_roll = false
 	duck_cooldown_time = maxf(0.0, duck_cooldown_time - delta)
 	jump_buffer_time = maxf(0.0, jump_buffer_time - delta)
 	duck_buffer_time = maxf(0.0, duck_buffer_time - delta)
 	_apply_input_buffers()
+	if landed and was_air_ducking:
+		_start_duck(true)
 
 	for obstacle in obstacles:
 		obstacle["z"] = float(obstacle["z"]) + travel
@@ -132,6 +142,8 @@ func change_lane(direction: int) -> void:
 func jump() -> void:
 	if state != RunState.RUNNING:
 		return
+	if is_air_ducking() or air_duck_landing_roll:
+		return
 	if not is_grounded():
 		jump_buffer_time = TUNING.input_buffer_duration
 		return
@@ -140,25 +152,45 @@ func jump() -> void:
 
 func _start_jump() -> void:
 	duck_time = 0.0
+	air_duck_landing_roll = false
 	jump_buffer_time = 0.0
 	vertical_velocity = TUNING.jump_velocity
 	_emit_event("jumped")
 
 
 func duck() -> void:
-	if state != RunState.RUNNING:
+	if state != RunState.RUNNING or is_air_ducking() or duck_time > 0.0:
 		return
-	if not is_grounded() or duck_cooldown_time > 0.0:
+	if not is_grounded():
+		_start_air_duck()
+		return
+	if duck_cooldown_time > 0.0:
 		duck_buffer_time = TUNING.input_buffer_duration
 		return
 	_start_duck()
 
 
-func _start_duck() -> void:
+func _start_air_duck() -> void:
+	jump_buffer_time = 0.0
+	duck_buffer_time = 0.0
+	air_duck_time = maxf(TUNING.air_duck_dive_duration, 0.001)
+	_emit_event("air_duck_started")
+
+
+func _start_duck(from_air_duck := false) -> void:
 	duck_buffer_time = 0.0
 	duck_time = TUNING.duck_duration
 	duck_cooldown_time = TUNING.duck_duration + TUNING.duck_cooldown
+	air_duck_landing_roll = from_air_duck
 	_emit_event("ducked")
+
+
+func is_air_ducking() -> bool:
+	return air_duck_time > 0.0
+
+
+func is_ducking() -> bool:
+	return is_air_ducking() or duck_time > 0.0
 
 
 func is_grounded() -> bool:
@@ -224,6 +256,16 @@ static func updated_high_score(high_score: int, run_score: int) -> int:
 
 
 func _update_vertical_motion(delta: float) -> void:
+	if is_air_ducking():
+		var remaining := maxf(air_duck_time, 0.001)
+		player_y = move_toward(player_y, 0.0, player_y * delta / remaining)
+		air_duck_time = maxf(0.0, air_duck_time - delta)
+		if air_duck_time <= 0.0 or player_y <= 0.001:
+			player_y = 0.0
+			vertical_velocity = 0.0
+			air_duck_time = 0.0
+		return
+
 	if is_grounded():
 		player_y = 0.0
 		vertical_velocity = 0.0
@@ -290,7 +332,7 @@ func _has_collision() -> bool:
 				if player_y < 1.0:
 					return true
 			ObstacleType.OVERHEAD_BAR:
-				if duck_time <= 0.0:
+				if not is_ducking():
 					return true
 			ObstacleType.WALL:
 				return true
