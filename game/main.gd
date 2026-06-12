@@ -9,6 +9,7 @@ const TUNING = preload("res://game/default_runner_tuning.tres")
 const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader")
 const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
 const PLAYER_TEXTURE = preload("res://assets/player/white.png")
+const HUD_FONT: FontFile = preload("res://assets/fonts/Michroma-Regular.ttf")
 const SAVE_PATH := "user://dog_run.cfg"
 const FIRST_LAUNCH_TUTORIAL_TEXT := "SWIPE LEFT / RIGHT TO MOVE\nSWIPE UP TO JUMP\nSWIPE DOWN TO DUCK\n\nTap to Start"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
@@ -234,8 +235,7 @@ func _build_world() -> void:
 
 
 func _build_hud() -> void:
-	_hud_font = FontFile.new()
-	_hud_font.data = FileAccess.get_file_as_bytes("res://assets/fonts/Michroma-Regular.ttf")
+	_hud_font = HUD_FONT
 
 	var canvas := CanvasLayer.new()
 	add_child(canvas)

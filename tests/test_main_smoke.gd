@@ -147,7 +147,9 @@ func _uses_refreshed_hud() -> bool:
 	if multiplier_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_RIGHT:
 		return false
 	var hud_font: FontFile = _main.get("_hud_font")
-	if hud_font == null or hud_font.data.is_empty() or score_label.get_theme_font("font") != hud_font:
+	if hud_font == null or hud_font.resource_path != "res://assets/fonts/Michroma-Regular.ttf":
+		return false
+	if hud_font.data.is_empty() or score_label.get_theme_font("font") != hud_font:
 		return false
 	for label in _main.find_children("*", "Label", true, false):
 		if label.get_theme_font("font") != hud_font:
