@@ -4,7 +4,7 @@
 
 **Goal:** Make ducking during a jump immediately enter a compact fast dive, then transition into the existing short ground roll.
 
-**Architecture:** Add a separate `air_duck_time` state to `RunnerSimulation` so airborne descent and grounded duck timing remain independent. The simulation owns input rules, descent timing, collision state, and events; `Main` only reads the new state to apply the compact airborne-roll pose.
+**Architecture:** Add separate `air_duck_time` and `air_duck_landing_roll` state to `RunnerSimulation` so airborne descent, its committed landing roll, and ordinary grounded duck behavior remain distinct. The simulation owns input rules, descent timing, collision state, and events; `Main` only reads the new state to apply the compact airborne-roll pose.
 
 **Tech Stack:** Godot 4.5, GDScript, existing headless GDScript test suites
 
@@ -205,6 +205,7 @@ Add beside the existing duck state:
 var duck_time := 0.0
 var duck_cooldown_time := 0.0
 var air_duck_time := 0.0
+var air_duck_landing_roll := false
 ```
 
 Reset it in `start()`:
@@ -213,6 +214,7 @@ Reset it in `start()`:
 duck_time = 0.0
 duck_cooldown_time = 0.0
 air_duck_time = 0.0
+air_duck_landing_roll = false
 ```
 
 - [ ] **Step 5: Implement committed input rules**
@@ -223,7 +225,7 @@ Replace `jump()`, `duck()`, and the duck-start helpers with:
 func jump() -> void:
 	if state != RunState.RUNNING:
 		return
-	if is_air_ducking() or duck_time > 0.0:
+	if is_air_ducking() or air_duck_landing_roll:
 		return
 	if not is_grounded():
 		jump_buffer_time = TUNING.input_buffer_duration
@@ -250,10 +252,11 @@ func _start_air_duck() -> void:
 	_emit_event("air_duck_started")
 
 
-func _start_duck() -> void:
+func _start_duck(from_air_duck := false) -> void:
 	duck_buffer_time = 0.0
 	duck_time = TUNING.duck_duration
 	duck_cooldown_time = TUNING.duck_duration + TUNING.duck_cooldown
+	air_duck_landing_roll = from_air_duck
 	_emit_event("ducked")
 ```
 
@@ -280,12 +283,14 @@ var landed := not was_grounded and is_grounded()
 if landed:
 	_emit_event("landed")
 duck_time = maxf(0.0, duck_time - delta)
+if duck_time <= 0.0:
+	air_duck_landing_roll = false
 duck_cooldown_time = maxf(0.0, duck_cooldown_time - delta)
 jump_buffer_time = maxf(0.0, jump_buffer_time - delta)
 duck_buffer_time = maxf(0.0, duck_buffer_time - delta)
 _apply_input_buffers()
 if landed and was_air_ducking:
-	_start_duck()
+	_start_duck(true)
 ```
 
 Replace `_update_vertical_motion()` with:
