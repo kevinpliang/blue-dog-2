@@ -13,8 +13,8 @@ config_version=5
 config/name="Dog Run"
 config/version="2.0.0"
 run/main_scene="res://game/main.tscn"
-config/icon="res://assets/app_icon.svg"
 config/features=PackedStringArray("4.5")
+config/icon="res://assets/app_icon.svg"
 
 [display]
 

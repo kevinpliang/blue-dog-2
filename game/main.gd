@@ -516,7 +516,7 @@ func _update_player(delta: float) -> void:
 	if simulation.state == Simulation.RunState.RUNNING:
 		var speed_ratio := inverse_lerp(TUNING.start_speed, TUNING.max_speed, simulation.speed)
 		var spin_rate := lerpf(TUNING.player_spin_start_rate, TUNING.player_spin_max_rate, speed_ratio)
-		_player_roll_angle = fposmod(_player_roll_angle - spin_rate * delta, TAU)
+		_player_roll_angle = fposmod(_player_roll_angle + spin_rate * delta, TAU)
 	_player.basis = Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, _player_roll_angle)
 
 
