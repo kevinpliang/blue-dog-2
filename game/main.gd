@@ -10,6 +10,7 @@ const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader"
 const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
 const PLAYER_TEXTURE = preload("res://assets/player/white.png")
 const HUD_FONT: FontFile = preload("res://assets/fonts/Michroma-Regular.ttf")
+const SETTINGS_ICON: Texture2D = preload("res://assets/icons/settings.svg")
 const SAVE_PATH := "user://dog_run.cfg"
 const FIRST_LAUNCH_TUTORIAL_TEXT := "SWIPE LEFT / RIGHT TO MOVE\nSWIPE UP TO JUMP\nSWIPE DOWN TO DUCK\n\nTap to Start"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
@@ -18,6 +19,8 @@ const PLAYER_TEXTURE_UV_SCALE := Vector3(4.0, 1.0, 1.0)
 const PLAYER_TEXTURE_UV_OFFSET := Vector3(-1.5, 0.0, 0.0)
 const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
+const DEFAULT_SOUND_ENABLED := true
+const DEFAULT_SOUND_VOLUME := 1.0
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
@@ -25,6 +28,8 @@ var performance_monitor = PerformanceMonitor.new()
 var high_score := 0
 var _save_path := SAVE_PATH
 var _tutorial_completed := false
+var _sound_enabled := DEFAULT_SOUND_ENABLED
+var _sound_volume := DEFAULT_SOUND_VOLUME
 var _app_paused := false
 var _pointer_start := Vector2.ZERO
 var _pointer_tracking := false
@@ -45,6 +50,12 @@ var _overlay_label: Label
 var _run_summary: VBoxContainer
 var _new_high_score_label: Label
 var _run_summary_values := {}
+var _settings_button: Button
+var _settings_modal_blocker: ColorRect
+var _settings_panel: PanelContainer
+var _sound_toggle_button: Button
+var _volume_slider: HSlider
+var _volume_value_label: Label
 var _restart_fade: ColorRect
 var _previous_player_x := 0.0
 var _landing_pulse_time := 0.0
@@ -128,6 +139,11 @@ func advance_simulation(delta: float) -> void:
 
 
 func _handle_pointer_release(end_position: Vector2) -> void:
+	if _settings_open():
+		return
+	if _settings_button != null and _settings_button.visible and _settings_button.get_global_rect().has_point(end_position):
+		_open_settings()
+		return
 	var command: int = input_interpreter.interpret(
 		_pointer_start,
 		end_position,
@@ -147,6 +163,8 @@ func _handle_pointer_release(end_position: Vector2) -> void:
 
 
 func _handle_tap() -> void:
+	if _settings_open():
+		return
 	if simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER:
 		if simulation.state == Simulation.RunState.READY and not _tutorial_completed:
 			_tutorial_completed = true
@@ -156,6 +174,59 @@ func _handle_tap() -> void:
 		_previous_player_x = simulation.current_x
 		_landing_pulse_time = 0.0
 		_play_restart_fade()
+
+
+func _open_settings() -> void:
+	if _settings_panel == null or _settings_modal_blocker == null:
+		return
+	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
+		return
+	_sync_settings_controls()
+	_settings_modal_blocker.visible = true
+	_settings_panel.visible = true
+
+
+func _close_settings() -> void:
+	if _settings_panel != null:
+		_settings_panel.visible = false
+	if _settings_modal_blocker != null:
+		_settings_modal_blocker.visible = false
+
+
+func _settings_open() -> bool:
+	return _settings_panel != null and _settings_panel.visible
+
+
+func _toggle_sound() -> void:
+	_set_sound_enabled(not _sound_enabled)
+
+
+func _set_sound_enabled(value: bool) -> void:
+	_sound_enabled = value
+	_apply_sound_settings()
+	_sync_settings_controls()
+	_save_progress()
+
+
+func _set_sound_volume(value: float) -> void:
+	_sound_volume = clampf(value, 0.0, 1.0)
+	_apply_sound_settings()
+	_sync_settings_controls()
+	_save_progress()
+
+
+func _apply_sound_settings() -> void:
+	if _feedback != null:
+		_feedback.set_sound_settings(_sound_enabled, _sound_volume)
+
+
+func _sync_settings_controls() -> void:
+	if _sound_toggle_button != null:
+		_sound_toggle_button.text = "SOUND: ON" if _sound_enabled else "SOUND: OFF"
+	if _volume_slider != null and not is_equal_approx(_volume_slider.value, _sound_volume):
+		_volume_slider.set_value_no_signal(_sound_volume)
+	if _volume_value_label != null:
+		_volume_value_label.text = "%d%%" % roundi(_sound_volume * 100.0)
 
 
 func _handle_keyboard() -> void:
@@ -355,6 +426,9 @@ func _build_hud() -> void:
 	_style_label(restart_label, 28)
 	_run_summary.add_child(restart_label)
 
+	_build_settings_ui(root)
+
+
 func _style_label(label: Label, font_size: int) -> void:
 	label.add_theme_font_override("font", _hud_font)
 	label.add_theme_font_size_override("font_size", font_size)
@@ -362,6 +436,15 @@ func _style_label(label: Label, font_size: int) -> void:
 	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
 	label.add_theme_constant_override("shadow_offset_x", 2)
 	label.add_theme_constant_override("shadow_offset_y", 2)
+
+
+func _make_ui_box_style(background: Color, border: Color, radius: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(radius)
+	return style
 
 
 func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> void:
@@ -378,6 +461,114 @@ func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> v
 	_style_label(value, 28)
 	grid.add_child(value)
 	_run_summary_values[key] = value
+
+
+func _build_settings_ui(root: Control) -> void:
+	_settings_button = Button.new()
+	_settings_button.name = "SettingsButton"
+	_settings_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_settings_button.offset_left = -88.0
+	_settings_button.offset_top = 8.0
+	_settings_button.offset_right = -16.0
+	_settings_button.offset_bottom = 80.0
+	_settings_button.icon = SETTINGS_ICON
+	_settings_button.expand_icon = true
+	_settings_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_settings_button.focus_mode = Control.FOCUS_NONE
+	_settings_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 18))
+	_settings_button.add_theme_stylebox_override("hover", _make_ui_box_style(Color(0.0, 0.18, 0.22, 0.72), Color(0.0, 0.95, 1.0), 18))
+	_settings_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.35, 0.42, 0.85), Color.WHITE, 18))
+	_settings_button.pressed.connect(_open_settings)
+	root.add_child(_settings_button)
+
+	_settings_modal_blocker = ColorRect.new()
+	_settings_modal_blocker.name = "SettingsModalBlocker"
+	_settings_modal_blocker.color = Color(0.0, 0.0, 0.0, 0.5)
+	_settings_modal_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_modal_blocker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settings_modal_blocker.visible = false
+	root.add_child(_settings_modal_blocker)
+
+	_settings_panel = PanelContainer.new()
+	_settings_panel.name = "SettingsPanel"
+	_settings_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_settings_panel.offset_left = -280.0
+	_settings_panel.offset_top = -230.0
+	_settings_panel.offset_right = 280.0
+	_settings_panel.offset_bottom = 230.0
+	_settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_panel.visible = false
+	_settings_panel.add_theme_stylebox_override("panel", _make_ui_box_style(Color(0.0, 0.02, 0.04, 0.92), Color(0.0, 0.85, 1.0), 28))
+	root.add_child(_settings_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 34)
+	margin.add_theme_constant_override("margin_top", 30)
+	margin.add_theme_constant_override("margin_right", 34)
+	margin.add_theme_constant_override("margin_bottom", 30)
+	_settings_panel.add_child(margin)
+
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 22)
+	margin.add_child(stack)
+
+	var title := Label.new()
+	title.name = "SettingsTitleLabel"
+	title.text = "SETTINGS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_style_label(title, 36)
+	stack.add_child(title)
+
+	_sound_toggle_button = Button.new()
+	_sound_toggle_button.name = "SoundToggleButton"
+	_sound_toggle_button.focus_mode = Control.FOCUS_NONE
+	_sound_toggle_button.add_theme_font_override("font", _hud_font)
+	_sound_toggle_button.add_theme_font_size_override("font_size", 28)
+	_sound_toggle_button.add_theme_color_override("font_color", Color.WHITE)
+	_sound_toggle_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.08, 0.12, 0.75), Color(0.0, 0.85, 1.0), 16))
+	_sound_toggle_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 16))
+	_sound_toggle_button.pressed.connect(_toggle_sound)
+	stack.add_child(_sound_toggle_button)
+
+	var volume_row := HBoxContainer.new()
+	volume_row.add_theme_constant_override("separation", 18)
+	stack.add_child(volume_row)
+
+	var volume_label := Label.new()
+	volume_label.text = "VOLUME"
+	volume_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_label(volume_label, 24)
+	volume_row.add_child(volume_label)
+
+	_volume_value_label = Label.new()
+	_volume_value_label.name = "VolumeValueLabel"
+	_volume_value_label.custom_minimum_size = Vector2(100.0, 0.0)
+	_volume_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_style_label(_volume_value_label, 24)
+	volume_row.add_child(_volume_value_label)
+
+	_volume_slider = HSlider.new()
+	_volume_slider.name = "VolumeSlider"
+	_volume_slider.min_value = 0.0
+	_volume_slider.max_value = 1.0
+	_volume_slider.step = 0.05
+	_volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_volume_slider.value_changed.connect(_set_sound_volume)
+	stack.add_child(_volume_slider)
+
+	var close_button := Button.new()
+	close_button.name = "CloseSettingsButton"
+	close_button.text = "CLOSE"
+	close_button.focus_mode = Control.FOCUS_NONE
+	close_button.add_theme_font_override("font", _hud_font)
+	close_button.add_theme_font_size_override("font_size", 26)
+	close_button.add_theme_color_override("font_color", Color.WHITE)
+	close_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 16))
+	close_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 16))
+	close_button.pressed.connect(_close_settings)
+	stack.add_child(close_button)
+
+	_sync_settings_controls()
 
 
 func _add_box(size: Vector3, position: Vector3, color: Color, emission := false) -> MeshInstance3D:
@@ -597,6 +788,10 @@ func _update_hud() -> void:
 	_score_stack.visible = simulation.state == Simulation.RunState.RUNNING
 	_run_summary.visible = false
 	_start_title_label.visible = false
+	if _settings_button != null:
+		_settings_button.visible = simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER
+	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
+		_close_settings()
 
 	match simulation.state:
 		Simulation.RunState.READY:
@@ -629,6 +824,8 @@ func _save_progress() -> void:
 	var config := ConfigFile.new()
 	config.set_value("scores", "high_score", high_score)
 	config.set_value("progress", "tutorial_completed", _tutorial_completed)
+	config.set_value("settings", "sound_enabled", _sound_enabled)
+	config.set_value("settings", "sound_volume", _sound_volume)
 	config.save(_save_path)
 
 
@@ -637,6 +834,10 @@ func _load_progress() -> void:
 	if config.load(_save_path) == OK:
 		high_score = int(config.get_value("scores", "high_score", 0))
 		_tutorial_completed = bool(config.get_value("progress", "tutorial_completed", false))
+		_sound_enabled = bool(config.get_value("settings", "sound_enabled", DEFAULT_SOUND_ENABLED))
+		_sound_volume = clampf(float(config.get_value("settings", "sound_volume", DEFAULT_SOUND_VOLUME)), 0.0, 1.0)
+	_apply_sound_settings()
+	_sync_settings_controls()
 
 
 func _play_restart_fade() -> void:
