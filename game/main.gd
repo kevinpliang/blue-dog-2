@@ -21,6 +21,9 @@ const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
 const DEFAULT_SOUND_ENABLED := true
 const DEFAULT_SOUND_VOLUME := 1.0
+const SETTINGS_BUTTON_SIZE := 96.0
+const SETTINGS_BUTTON_TOP_MARGIN := 8.0
+const SETTINGS_BUTTON_RIGHT_MARGIN := 16.0
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
@@ -362,7 +365,7 @@ func _build_hud() -> void:
 	_start_title_label.offset_bottom = -30.0
 	_start_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_start_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_style_label(_start_title_label, 44)
+	_style_label(_start_title_label, 72)
 	root.add_child(_start_title_label)
 
 	_overlay_label = Label.new()
@@ -467,10 +470,11 @@ func _build_settings_ui(root: Control) -> void:
 	_settings_button = Button.new()
 	_settings_button.name = "SettingsButton"
 	_settings_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_settings_button.offset_left = -88.0
-	_settings_button.offset_top = 8.0
-	_settings_button.offset_right = -16.0
-	_settings_button.offset_bottom = 80.0
+	_settings_button.offset_left = -(SETTINGS_BUTTON_RIGHT_MARGIN + SETTINGS_BUTTON_SIZE)
+	_settings_button.offset_top = SETTINGS_BUTTON_TOP_MARGIN
+	_settings_button.offset_right = -SETTINGS_BUTTON_RIGHT_MARGIN
+	_settings_button.offset_bottom = SETTINGS_BUTTON_TOP_MARGIN + SETTINGS_BUTTON_SIZE
+	_settings_button.custom_minimum_size = Vector2(SETTINGS_BUTTON_SIZE, SETTINGS_BUTTON_SIZE)
 	_settings_button.icon = SETTINGS_ICON
 	_settings_button.expand_icon = true
 	_settings_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -502,6 +506,8 @@ func _build_settings_ui(root: Control) -> void:
 	root.add_child(_settings_panel)
 
 	var margin := MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_theme_constant_override("margin_left", 34)
 	margin.add_theme_constant_override("margin_top", 30)
 	margin.add_theme_constant_override("margin_right", 34)
@@ -510,6 +516,7 @@ func _build_settings_ui(root: Control) -> void:
 
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 22)
+	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(stack)
 
 	var title := Label.new()
@@ -555,6 +562,11 @@ func _build_settings_ui(root: Control) -> void:
 	_volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_volume_slider.value_changed.connect(_set_sound_volume)
 	stack.add_child(_volume_slider)
+
+	var spacer := Control.new()
+	spacer.name = "SettingsPanelSpacer"
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(spacer)
 
 	var close_button := Button.new()
 	close_button.name = "CloseSettingsButton"

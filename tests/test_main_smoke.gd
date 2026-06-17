@@ -201,6 +201,9 @@ func _uses_sound_settings_panel() -> bool:
 	if button.icon == null or button.icon.resource_path != "res://assets/icons/settings.svg":
 		DirAccess.remove_absolute(absolute_path)
 		return false
+	if button.size.x < MainScript.SETTINGS_BUTTON_SIZE or button.size.y < MainScript.SETTINGS_BUTTON_SIZE:
+		DirAccess.remove_absolute(absolute_path)
+		return false
 	if not is_equal_approx(slider.min_value, 0.0) or not is_equal_approx(slider.max_value, 1.0):
 		DirAccess.remove_absolute(absolute_path)
 		return false
@@ -213,6 +216,10 @@ func _uses_sound_settings_panel() -> bool:
 
 	_main._open_settings()
 	if not panel.visible or not blocker.visible:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	var close_bottom_gap := panel.get_global_rect().end.y - close_button.get_global_rect().end.y
+	if close_bottom_gap > 56.0:
 		DirAccess.remove_absolute(absolute_path)
 		return false
 	_main._handle_tap()
@@ -370,7 +377,7 @@ func _uses_first_launch_tutorial() -> bool:
 	if not start_title.visible or start_title.text != "DOG RUN":
 		DirAccess.remove_absolute(absolute_path)
 		return false
-	if start_title.get_theme_font_size("font_size") != 44 or _main._overlay_label.text != "Tap to Start":
+	if start_title.get_theme_font_size("font_size") != 72 or _main._overlay_label.text != "Tap to Start":
 		DirAccess.remove_absolute(absolute_path)
 		return false
 
