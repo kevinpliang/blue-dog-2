@@ -1,22 +1,22 @@
 class_name RunnerTuning
 extends Resource
 
-@export var duck_duration := 0.3
+@export var duck_duration := 0.4
 @export var duck_cooldown := 0.05
-@export var air_duck_dive_duration := 0.12
+@export var air_duck_dive_duration := 0.1
 @export var start_speed := 12.0
 @export var max_speed := 24.0
 @export var speed_acceleration := 0.35
 @export var early_pattern_spacing := 24.0
 @export var early_spacing_end_distance := 250.0
-@export var normal_pattern_spacing_base := 16.0
+@export var normal_pattern_spacing_base := 20.0
 @export var normal_pattern_spacing_speed_factor := 0.25
-@export var minimum_pattern_spacing := 9.0
+@export var minimum_pattern_spacing := 16.0
 @export var tier_one_unlock_distance := 250.0
 @export var tier_two_unlock_distance := 650.0
 @export var lane_change_speed := 32.0
-@export var jump_velocity := 9.5
-@export var gravity := 24.0
+@export var jump_velocity := 15
+@export var gravity := 50.0
 @export var input_buffer_duration := 0.12
 @export var swipe_width_ratio := 50.0 / 720.0
 @export var track_fade_start := 70.0

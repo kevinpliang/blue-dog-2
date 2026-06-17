@@ -10,8 +10,11 @@ const SHAKE_DURATION := 0.18
 const SHAKE_STRENGTH := 0.12
 const HAPTICS_ENABLED := true
 const AUDIO_ENABLED := true
+const BASE_AUDIO_VOLUME_DB := -8.0
 
 var shake_time := 0.0
+var sound_enabled := true
+var sound_volume := 1.0
 
 var _camera: Camera3D
 var _camera_base_position := Vector3.ZERO
@@ -64,7 +67,7 @@ func prepare() -> void:
 
 	while _audio_players.size() < AUDIO_POOL_SIZE:
 		var player := AudioStreamPlayer.new()
-		player.volume_db = -8.0
+		player.volume_db = _effective_audio_volume_db()
 		add_child(player)
 		_audio_players.append(player)
 
@@ -93,12 +96,36 @@ func set_feedback_paused(value: bool) -> void:
 			player.stop()
 
 
+func set_sound_settings(enabled: bool, volume: float) -> void:
+	sound_enabled = enabled
+	sound_volume = clampf(volume, 0.0, 1.0)
+	for player in _audio_players:
+		player.volume_db = _effective_audio_volume_db()
+
+
+func sound_settings() -> Dictionary:
+	return {
+		"enabled": sound_enabled,
+		"volume": sound_volume,
+	}
+
+
 func particle_pool_size() -> int:
 	return _particles.size()
 
 
 func audio_pool_size() -> int:
 	return _audio_players.size()
+
+
+func first_audio_stream_is_empty() -> bool:
+	return _audio_players.is_empty() or _audio_players[0].stream == null
+
+
+func first_audio_volume_db() -> float:
+	if _audio_players.is_empty():
+		return BASE_AUDIO_VOLUME_DB
+	return _audio_players[0].volume_db
 
 
 func particles_are_idle() -> bool:
@@ -119,16 +146,23 @@ func _spawn_impact(position: Vector3) -> void:
 
 
 func _play_cue(type: String) -> void:
-	if not TUNING.audio_enabled or _audio_players.is_empty():
+	if not TUNING.audio_enabled or not sound_enabled or sound_volume <= 0.0 or _audio_players.is_empty():
 		return
 	var cue := _audio_library.cue(type)
 	if cue == null:
 		return
 	var player := _audio_players[_audio_index]
 	_audio_index = (_audio_index + 1) % _audio_players.size()
+	player.volume_db = _effective_audio_volume_db()
 	player.stream = cue
 	if is_inside_tree():
 		player.play()
+
+
+func _effective_audio_volume_db() -> float:
+	if sound_volume <= 0.0:
+		return -80.0
+	return BASE_AUDIO_VOLUME_DB + linear_to_db(sound_volume)
 
 
 func _vibrate(milliseconds: int) -> void:

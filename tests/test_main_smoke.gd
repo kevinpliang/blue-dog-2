@@ -41,6 +41,9 @@ func _process(_delta: float) -> bool:
 	elif not _uses_refreshed_hud():
 		push_error("Main scene does not use the refreshed Michroma HUD.")
 		quit(1)
+	elif not _uses_sound_settings_panel():
+		push_error("Main scene does not include the sound settings panel.")
+		quit(1)
 	elif not _uses_moderate_lower_third_framing():
 		push_error("Main scene does not use the tuned moderate lower-third framing.")
 		quit(1)
@@ -179,6 +182,90 @@ func _uses_refreshed_hud() -> bool:
 	return uses_summary
 
 
+func _uses_sound_settings_panel() -> bool:
+	var settings_save_path := "user://dog_run_settings_smoke.cfg"
+	var absolute_path := ProjectSettings.globalize_path(settings_save_path)
+	DirAccess.remove_absolute(absolute_path)
+	_main._save_path = settings_save_path
+
+	var button: Button = _main.find_child("SettingsButton", true, false)
+	var panel: Control = _main.find_child("SettingsPanel", true, false)
+	var blocker: Control = _main.find_child("SettingsModalBlocker", true, false)
+	var toggle: Button = _main.find_child("SoundToggleButton", true, false)
+	var slider: HSlider = _main.find_child("VolumeSlider", true, false)
+	var close_button: Button = _main.find_child("CloseSettingsButton", true, false)
+	var volume_value: Label = _main.find_child("VolumeValueLabel", true, false)
+	if button == null or panel == null or blocker == null or toggle == null or slider == null or close_button == null or volume_value == null:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if button.icon == null or button.icon.resource_path != "res://assets/icons/settings.svg":
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if button.size.x < MainScript.SETTINGS_BUTTON_SIZE or button.size.y < MainScript.SETTINGS_BUTTON_SIZE:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if button.get_theme_constant("icon_max_width") != int(MainScript.SETTINGS_ICON_MAX_WIDTH):
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if MainScript.SETTINGS_BUTTON_SIZE - MainScript.SETTINGS_ICON_MAX_WIDTH < 48.0:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if not is_equal_approx(slider.min_value, 0.0) or not is_equal_approx(slider.max_value, 1.0):
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main.simulation.state = _main.simulation.RunState.READY
+	_main._update_hud()
+	if not button.visible or panel.visible or blocker.visible:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main._open_settings()
+	if not panel.visible or not blocker.visible:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	var close_bottom_gap := panel.get_global_rect().end.y - close_button.get_global_rect().end.y
+	if close_bottom_gap > 56.0:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	_main._handle_tap()
+	if _main.simulation.state != _main.simulation.RunState.READY:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main._set_sound_enabled(false)
+	_main._set_sound_volume(0.35)
+	_main._save_progress()
+	_main._set_sound_enabled(true)
+	_main._set_sound_volume(1.0)
+	_main._load_progress()
+	if _main._sound_enabled or not is_equal_approx(_main._sound_volume, 0.35):
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	var feedback_settings: Dictionary = _main._feedback.sound_settings()
+	if bool(feedback_settings["enabled"]) or not is_equal_approx(float(feedback_settings["volume"]), 0.35):
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if toggle.text != "SOUND: OFF" or volume_value.text != "35%":
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main._close_settings()
+	_main.simulation.state = _main.simulation.RunState.RUNNING
+	_main._update_hud()
+	if button.visible or panel.visible or blocker.visible:
+		DirAccess.remove_absolute(absolute_path)
+		return false
+
+	_main.simulation.state = _main.simulation.RunState.GAME_OVER
+	_main._update_hud()
+	var visible_on_game_over := button.visible and not panel.visible and not blocker.visible
+	_main.simulation.state = _main.simulation.RunState.RUNNING
+	_main._update_hud()
+	DirAccess.remove_absolute(absolute_path)
+	return visible_on_game_over
+
+
 func _uses_moderate_lower_third_framing() -> bool:
 	if not is_equal_approx(_main._camera.fov, MainScript.TUNING.camera_fov):
 		return false
@@ -296,7 +383,7 @@ func _uses_first_launch_tutorial() -> bool:
 	if not start_title.visible or start_title.text != "DOG RUN":
 		DirAccess.remove_absolute(absolute_path)
 		return false
-	if start_title.get_theme_font_size("font_size") != 44 or _main._overlay_label.text != "Tap to Start":
+	if start_title.get_theme_font_size("font_size") != 72 or _main._overlay_label.text != "Tap to Start":
 		DirAccess.remove_absolute(absolute_path)
 		return false
 

@@ -10,26 +10,43 @@ const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader"
 const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
 const PLAYER_TEXTURE = preload("res://assets/player/white.png")
 const HUD_FONT: FontFile = preload("res://assets/fonts/Michroma-Regular.ttf")
+const SETTINGS_ICON: Texture2D = preload("res://assets/icons/settings.svg")
 const SAVE_PATH := "user://dog_run.cfg"
 const FIRST_LAUNCH_TUTORIAL_TEXT := "SWIPE LEFT / RIGHT TO MOVE\nSWIPE UP TO JUMP\nSWIPE DOWN TO DUCK\n\nTap to Start"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
+const MAX_COIN_NODES := 128
+const COIN_COLOR := Color(1.0, 0.78, 0.08)
+const COIN_RADIUS := 0.42
+const COIN_THICKNESS := 0.12
+const COIN_ROTATION_SPEED := 2.4
 const OBSTACLE_OPACITY := 0.4
 const PLAYER_TEXTURE_UV_SCALE := Vector3(4.0, 1.0, 1.0)
 const PLAYER_TEXTURE_UV_OFFSET := Vector3(-1.5, 0.0, 0.0)
 const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
+const DEFAULT_SOUND_ENABLED := true
+const DEFAULT_SOUND_VOLUME := 1.0
+const SETTINGS_BUTTON_SIZE := 96.0
+const SETTINGS_ICON_MAX_WIDTH := 64.0
+const SETTINGS_BUTTON_TOP_MARGIN := 8.0
+const SETTINGS_BUTTON_RIGHT_MARGIN := 16.0
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
 var performance_monitor = PerformanceMonitor.new()
 var high_score := 0
+var _total_coins := 0
 var _save_path := SAVE_PATH
 var _tutorial_completed := false
+var _sound_enabled := DEFAULT_SOUND_ENABLED
+var _sound_volume := DEFAULT_SOUND_VOLUME
 var _app_paused := false
 var _pointer_start := Vector2.ZERO
 var _pointer_tracking := false
 var _obstacle_nodes := {}
 var _obstacle_pool: Array[MeshInstance3D] = []
+var _coin_nodes := {}
+var _coin_pool: Array[MeshInstance3D] = []
 
 var _player_visual_pivot: Node3D
 var _player: MeshInstance3D
@@ -40,11 +57,18 @@ var _hud_font: FontFile
 var _score_stack: VBoxContainer
 var _score_label: Label
 var _multiplier_label: Label
+var _coin_label: Label
 var _start_title_label: Label
 var _overlay_label: Label
 var _run_summary: VBoxContainer
 var _new_high_score_label: Label
 var _run_summary_values := {}
+var _settings_button: Button
+var _settings_modal_blocker: ColorRect
+var _settings_panel: PanelContainer
+var _sound_toggle_button: Button
+var _volume_slider: HSlider
+var _volume_value_label: Label
 var _restart_fade: ColorRect
 var _previous_player_x := 0.0
 var _landing_pulse_time := 0.0
@@ -74,11 +98,13 @@ func _process(delta: float) -> void:
 	var events := simulation.drain_events()
 	_feedback.handle_events(events, _player_visual_pivot.position)
 	_handle_player_feedback_events(events)
+	_handle_coin_events(events)
 	if previous_state != simulation.state and simulation.state == Simulation.RunState.GAME_OVER:
 		_finish_run()
 
 	_update_player(delta)
 	_sync_obstacles()
+	_sync_coins(delta)
 	_update_hud()
 	performance_monitor.sample(delta, _obstacle_nodes.size())
 	var report := performance_monitor.take_report()
@@ -128,6 +154,11 @@ func advance_simulation(delta: float) -> void:
 
 
 func _handle_pointer_release(end_position: Vector2) -> void:
+	if _settings_open():
+		return
+	if _settings_button != null and _settings_button.visible and _settings_button.get_global_rect().has_point(end_position):
+		_open_settings()
+		return
 	var command: int = input_interpreter.interpret(
 		_pointer_start,
 		end_position,
@@ -147,6 +178,8 @@ func _handle_pointer_release(end_position: Vector2) -> void:
 
 
 func _handle_tap() -> void:
+	if _settings_open():
+		return
 	if simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER:
 		if simulation.state == Simulation.RunState.READY and not _tutorial_completed:
 			_tutorial_completed = true
@@ -156,6 +189,59 @@ func _handle_tap() -> void:
 		_previous_player_x = simulation.current_x
 		_landing_pulse_time = 0.0
 		_play_restart_fade()
+
+
+func _open_settings() -> void:
+	if _settings_panel == null or _settings_modal_blocker == null:
+		return
+	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
+		return
+	_sync_settings_controls()
+	_settings_modal_blocker.visible = true
+	_settings_panel.visible = true
+
+
+func _close_settings() -> void:
+	if _settings_panel != null:
+		_settings_panel.visible = false
+	if _settings_modal_blocker != null:
+		_settings_modal_blocker.visible = false
+
+
+func _settings_open() -> bool:
+	return _settings_panel != null and _settings_panel.visible
+
+
+func _toggle_sound() -> void:
+	_set_sound_enabled(not _sound_enabled)
+
+
+func _set_sound_enabled(value: bool) -> void:
+	_sound_enabled = value
+	_apply_sound_settings()
+	_sync_settings_controls()
+	_save_progress()
+
+
+func _set_sound_volume(value: float) -> void:
+	_sound_volume = clampf(value, 0.0, 1.0)
+	_apply_sound_settings()
+	_sync_settings_controls()
+	_save_progress()
+
+
+func _apply_sound_settings() -> void:
+	if _feedback != null:
+		_feedback.set_sound_settings(_sound_enabled, _sound_volume)
+
+
+func _sync_settings_controls() -> void:
+	if _sound_toggle_button != null:
+		_sound_toggle_button.text = "SOUND: ON" if _sound_enabled else "SOUND: OFF"
+	if _volume_slider != null and not is_equal_approx(_volume_slider.value, _sound_volume):
+		_volume_slider.set_value_no_signal(_sound_volume)
+	if _volume_value_label != null:
+		_volume_value_label.text = "%d%%" % roundi(_sound_volume * 100.0)
 
 
 func _handle_keyboard() -> void:
@@ -268,6 +354,18 @@ func _build_hud() -> void:
 	_score_stack.offset_bottom = 150.0
 	root.add_child(_score_stack)
 
+	_coin_label = Label.new()
+	_coin_label.name = "CoinLabel"
+	_coin_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_coin_label.offset_left = 0.0
+	_coin_label.offset_top = 0.0
+	_coin_label.offset_right = 320.0
+	_coin_label.offset_bottom = 64.0
+	_coin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_style_label(_coin_label, 28)
+	_coin_label.add_theme_color_override("font_color", COIN_COLOR)
+	root.add_child(_coin_label)
+
 	_score_label = Label.new()
 	_score_label.name = "ScoreLabel"
 	_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -355,6 +453,9 @@ func _build_hud() -> void:
 	_style_label(restart_label, 28)
 	_run_summary.add_child(restart_label)
 
+	_build_settings_ui(root)
+
+
 func _style_label(label: Label, font_size: int) -> void:
 	label.add_theme_font_override("font", _hud_font)
 	label.add_theme_font_size_override("font_size", font_size)
@@ -362,6 +463,15 @@ func _style_label(label: Label, font_size: int) -> void:
 	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
 	label.add_theme_constant_override("shadow_offset_x", 2)
 	label.add_theme_constant_override("shadow_offset_y", 2)
+
+
+func _make_ui_box_style(background: Color, border: Color, radius: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(radius)
+	return style
 
 
 func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> void:
@@ -378,6 +488,124 @@ func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> v
 	_style_label(value, 28)
 	grid.add_child(value)
 	_run_summary_values[key] = value
+
+
+func _build_settings_ui(root: Control) -> void:
+	_settings_button = Button.new()
+	_settings_button.name = "SettingsButton"
+	_settings_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_settings_button.offset_left = -(SETTINGS_BUTTON_RIGHT_MARGIN + SETTINGS_BUTTON_SIZE)
+	_settings_button.offset_top = SETTINGS_BUTTON_TOP_MARGIN
+	_settings_button.offset_right = -SETTINGS_BUTTON_RIGHT_MARGIN
+	_settings_button.offset_bottom = SETTINGS_BUTTON_TOP_MARGIN + SETTINGS_BUTTON_SIZE
+	_settings_button.custom_minimum_size = Vector2(SETTINGS_BUTTON_SIZE, SETTINGS_BUTTON_SIZE)
+	_settings_button.icon = SETTINGS_ICON
+	_settings_button.expand_icon = true
+	_settings_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_settings_button.focus_mode = Control.FOCUS_NONE
+	_settings_button.add_theme_constant_override("icon_max_width", int(SETTINGS_ICON_MAX_WIDTH))
+	_settings_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 18))
+	_settings_button.add_theme_stylebox_override("hover", _make_ui_box_style(Color(0.0, 0.18, 0.22, 0.72), Color(0.0, 0.95, 1.0), 18))
+	_settings_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.35, 0.42, 0.85), Color.WHITE, 18))
+	_settings_button.pressed.connect(_open_settings)
+	root.add_child(_settings_button)
+
+	_settings_modal_blocker = ColorRect.new()
+	_settings_modal_blocker.name = "SettingsModalBlocker"
+	_settings_modal_blocker.color = Color(0.0, 0.0, 0.0, 0.5)
+	_settings_modal_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_modal_blocker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settings_modal_blocker.visible = false
+	root.add_child(_settings_modal_blocker)
+
+	_settings_panel = PanelContainer.new()
+	_settings_panel.name = "SettingsPanel"
+	_settings_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_settings_panel.offset_left = -280.0
+	_settings_panel.offset_top = -230.0
+	_settings_panel.offset_right = 280.0
+	_settings_panel.offset_bottom = 230.0
+	_settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_panel.visible = false
+	_settings_panel.add_theme_stylebox_override("panel", _make_ui_box_style(Color(0.0, 0.02, 0.04, 0.92), Color(0.0, 0.85, 1.0), 28))
+	root.add_child(_settings_panel)
+
+	var margin := MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_theme_constant_override("margin_left", 34)
+	margin.add_theme_constant_override("margin_top", 30)
+	margin.add_theme_constant_override("margin_right", 34)
+	margin.add_theme_constant_override("margin_bottom", 30)
+	_settings_panel.add_child(margin)
+
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 22)
+	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(stack)
+
+	var title := Label.new()
+	title.name = "SettingsTitleLabel"
+	title.text = "SETTINGS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_style_label(title, 36)
+	stack.add_child(title)
+
+	_sound_toggle_button = Button.new()
+	_sound_toggle_button.name = "SoundToggleButton"
+	_sound_toggle_button.focus_mode = Control.FOCUS_NONE
+	_sound_toggle_button.add_theme_font_override("font", _hud_font)
+	_sound_toggle_button.add_theme_font_size_override("font_size", 28)
+	_sound_toggle_button.add_theme_color_override("font_color", Color.WHITE)
+	_sound_toggle_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.08, 0.12, 0.75), Color(0.0, 0.85, 1.0), 16))
+	_sound_toggle_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 16))
+	_sound_toggle_button.pressed.connect(_toggle_sound)
+	stack.add_child(_sound_toggle_button)
+
+	var volume_row := HBoxContainer.new()
+	volume_row.add_theme_constant_override("separation", 18)
+	stack.add_child(volume_row)
+
+	var volume_label := Label.new()
+	volume_label.text = "VOLUME"
+	volume_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_label(volume_label, 24)
+	volume_row.add_child(volume_label)
+
+	_volume_value_label = Label.new()
+	_volume_value_label.name = "VolumeValueLabel"
+	_volume_value_label.custom_minimum_size = Vector2(100.0, 0.0)
+	_volume_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_style_label(_volume_value_label, 24)
+	volume_row.add_child(_volume_value_label)
+
+	_volume_slider = HSlider.new()
+	_volume_slider.name = "VolumeSlider"
+	_volume_slider.min_value = 0.0
+	_volume_slider.max_value = 1.0
+	_volume_slider.step = 0.05
+	_volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_volume_slider.value_changed.connect(_set_sound_volume)
+	stack.add_child(_volume_slider)
+
+	var spacer := Control.new()
+	spacer.name = "SettingsPanelSpacer"
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(spacer)
+
+	var close_button := Button.new()
+	close_button.name = "CloseSettingsButton"
+	close_button.text = "CLOSE"
+	close_button.focus_mode = Control.FOCUS_NONE
+	close_button.add_theme_font_override("font", _hud_font)
+	close_button.add_theme_font_size_override("font_size", 26)
+	close_button.add_theme_color_override("font_color", Color.WHITE)
+	close_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 16))
+	close_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 16))
+	close_button.pressed.connect(_close_settings)
+	stack.add_child(close_button)
+
+	_sync_settings_controls()
 
 
 func _add_box(size: Vector3, position: Vector3, color: Color, emission := false) -> MeshInstance3D:
@@ -459,10 +687,24 @@ func _make_obstacle_material(color: Color) -> ShaderMaterial:
 	return material
 
 
+func _make_coin_material() -> StandardMaterial3D:
+	var material := _make_material(COIN_COLOR, true)
+	material.roughness = 0.35
+	return material
+
+
 func _handle_player_feedback_events(events: Array) -> void:
 	for event in events:
 		if event["type"] == "landed":
 			_landing_pulse_time = TUNING.landing_pulse_duration
+
+
+func _handle_coin_events(events: Array) -> void:
+	for event in events:
+		if event["type"] != "coin_collected":
+			continue
+		_total_coins += 1
+		_save_progress()
 
 
 func _update_player(delta: float) -> void:
@@ -591,12 +833,80 @@ func _obstacle_y(obstacle_type: int) -> float:
 	return 0.0
 
 
+func _sync_coins(delta: float) -> void:
+	var active_ids := {}
+	for coin in simulation.coins:
+		if bool(coin.get("collected", false)):
+			continue
+		var coin_id: int = coin["id"]
+		active_ids[coin_id] = true
+
+		var mesh_instance: MeshInstance3D
+		if _coin_nodes.has(coin_id):
+			mesh_instance = _coin_nodes[coin_id]
+		else:
+			mesh_instance = _acquire_coin()
+			if mesh_instance == null:
+				continue
+			_coin_nodes[coin_id] = mesh_instance
+
+		mesh_instance.position = Vector3(
+			simulation.lane_x(int(coin["lane"])),
+			0.75 + float(coin["height"]),
+			float(coin["z"]) + TUNING.visual_action_plane_z
+		)
+		mesh_instance.rotation.x = PI * 0.5
+		mesh_instance.rotation.y = fposmod(mesh_instance.rotation.y + COIN_ROTATION_SPEED * delta, TAU)
+		mesh_instance.visible = true
+
+	for coin_id in _coin_nodes.keys():
+		if active_ids.has(coin_id):
+			continue
+		var mesh_instance: MeshInstance3D = _coin_nodes[coin_id]
+		_coin_nodes.erase(coin_id)
+		mesh_instance.visible = false
+		_coin_pool.append(mesh_instance)
+
+
+func _acquire_coin() -> MeshInstance3D:
+	if not _coin_pool.is_empty():
+		return _coin_pool.pop_back()
+	if _coin_nodes.size() + _coin_pool.size() >= MAX_COIN_NODES:
+		return null
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "Coin"
+	_configure_coin(mesh_instance)
+	add_child(mesh_instance)
+	return mesh_instance
+
+
+func _configure_coin(mesh_instance: MeshInstance3D) -> void:
+	var coin_mesh := CylinderMesh.new()
+	coin_mesh.top_radius = COIN_RADIUS
+	coin_mesh.bottom_radius = COIN_RADIUS
+	coin_mesh.height = COIN_THICKNESS
+	coin_mesh.radial_segments = 32
+	coin_mesh.rings = 1
+	mesh_instance.mesh = coin_mesh
+	mesh_instance.material_override = _make_coin_material()
+
+
 func _update_hud() -> void:
 	_score_label.text = str(simulation.score())
 	_multiplier_label.text = "x%d" % simulation.multiplier
+	_coin_label.text = "COINS %d" % _total_coins
+	_coin_label.visible = (
+		simulation.state == Simulation.RunState.READY
+		or simulation.state == Simulation.RunState.RUNNING
+		or simulation.state == Simulation.RunState.GAME_OVER
+	)
 	_score_stack.visible = simulation.state == Simulation.RunState.RUNNING
 	_run_summary.visible = false
 	_start_title_label.visible = false
+	if _settings_button != null:
+		_settings_button.visible = simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER
+	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
+		_close_settings()
 
 	match simulation.state:
 		Simulation.RunState.READY:
@@ -628,7 +938,10 @@ func _finish_run() -> void:
 func _save_progress() -> void:
 	var config := ConfigFile.new()
 	config.set_value("scores", "high_score", high_score)
+	config.set_value("currency", "coins", _total_coins)
 	config.set_value("progress", "tutorial_completed", _tutorial_completed)
+	config.set_value("settings", "sound_enabled", _sound_enabled)
+	config.set_value("settings", "sound_volume", _sound_volume)
 	config.save(_save_path)
 
 
@@ -636,7 +949,12 @@ func _load_progress() -> void:
 	var config := ConfigFile.new()
 	if config.load(_save_path) == OK:
 		high_score = int(config.get_value("scores", "high_score", 0))
+		_total_coins = int(config.get_value("currency", "coins", 0))
 		_tutorial_completed = bool(config.get_value("progress", "tutorial_completed", false))
+		_sound_enabled = bool(config.get_value("settings", "sound_enabled", DEFAULT_SOUND_ENABLED))
+		_sound_volume = clampf(float(config.get_value("settings", "sound_volume", DEFAULT_SOUND_VOLUME)), 0.0, 1.0)
+	_apply_sound_settings()
+	_sync_settings_controls()
 
 
 func _play_restart_fade() -> void:
