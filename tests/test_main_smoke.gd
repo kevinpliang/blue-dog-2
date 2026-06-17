@@ -204,6 +204,12 @@ func _uses_sound_settings_panel() -> bool:
 	if button.size.x < MainScript.SETTINGS_BUTTON_SIZE or button.size.y < MainScript.SETTINGS_BUTTON_SIZE:
 		DirAccess.remove_absolute(absolute_path)
 		return false
+	if button.get_theme_constant("icon_max_width") != int(MainScript.SETTINGS_ICON_MAX_WIDTH):
+		DirAccess.remove_absolute(absolute_path)
+		return false
+	if MainScript.SETTINGS_BUTTON_SIZE - MainScript.SETTINGS_ICON_MAX_WIDTH < 48.0:
+		DirAccess.remove_absolute(absolute_path)
+		return false
 	if not is_equal_approx(slider.min_value, 0.0) or not is_equal_approx(slider.max_value, 1.0):
 		DirAccess.remove_absolute(absolute_path)
 		return false

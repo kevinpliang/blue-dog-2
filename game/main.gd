@@ -21,7 +21,8 @@ const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
 const DEFAULT_SOUND_ENABLED := true
 const DEFAULT_SOUND_VOLUME := 1.0
-const SETTINGS_BUTTON_SIZE := 96.0
+const SETTINGS_BUTTON_SIZE := 120.0
+const SETTINGS_ICON_MAX_WIDTH := 64.0
 const SETTINGS_BUTTON_TOP_MARGIN := 8.0
 const SETTINGS_BUTTON_RIGHT_MARGIN := 16.0
 
@@ -479,6 +480,7 @@ func _build_settings_ui(root: Control) -> void:
 	_settings_button.expand_icon = true
 	_settings_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_settings_button.focus_mode = Control.FOCUS_NONE
+	_settings_button.add_theme_constant_override("icon_max_width", int(SETTINGS_ICON_MAX_WIDTH))
 	_settings_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 18))
 	_settings_button.add_theme_stylebox_override("hover", _make_ui_box_style(Color(0.0, 0.18, 0.22, 0.72), Color(0.0, 0.95, 1.0), 18))
 	_settings_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.35, 0.42, 0.85), Color.WHITE, 18))
