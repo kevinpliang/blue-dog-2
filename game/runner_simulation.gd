@@ -20,6 +20,10 @@ const DUCK_COOLDOWN := 0.05
 const INPUT_BUFFER_DURATION := 0.12
 const IMPACT_DURATION := 0.3
 const SPAWN_LIMIT_Z := -80.0
+const COIN_COLLECTION_Z_RADIUS := 0.85
+const COIN_COLLECTION_X_RADIUS := 0.75
+const COIN_COLLECTION_HEIGHT_RADIUS := 0.55
+const COIN_REMOVAL_Z := 6.0
 
 var state: RunState = RunState.READY
 var target_lane := 1
@@ -41,13 +45,16 @@ var peak_multiplier := 1
 var near_miss_count := 0
 var clear_bonus := 0
 var near_miss_bonus := 0
+var run_coin_count := 0
 var obstacles: Array[Dictionary] = []
+var coins: Array[Dictionary] = []
 var next_spawn_z := -28.0
 
 var _rng := RandomNumberGenerator.new()
 var _validator = ReachabilityValidator.new()
 var _events: Array[Dictionary] = []
 var _next_obstacle_id := 1
+var _next_coin_id := 1
 var _next_row_id := 1
 
 
@@ -72,10 +79,13 @@ func start(seed_value: int) -> void:
 	near_miss_count = 0
 	clear_bonus = 0
 	near_miss_bonus = 0
+	run_coin_count = 0
 	_events.clear()
 	obstacles.clear()
+	coins.clear()
 	next_spawn_z = -28.0
 	_next_obstacle_id = 1
+	_next_coin_id = 1
 	_next_row_id = 1
 	_rng.seed = seed_value
 	_fill_obstacle_field()
@@ -113,6 +123,8 @@ func step(delta: float) -> void:
 
 	for obstacle in obstacles:
 		obstacle["z"] = float(obstacle["z"]) + travel
+	for coin in coins:
+		coin["z"] = float(coin["z"]) + travel
 	next_spawn_z += travel
 	_fill_obstacle_field()
 
@@ -122,10 +134,14 @@ func step(delta: float) -> void:
 		_emit_event("collision")
 		return
 
+	_collect_coins()
 	_mark_passed_obstacles()
 	for index in range(obstacles.size() - 1, -1, -1):
 		if float(obstacles[index]["z"]) > 6.0:
 			obstacles.remove_at(index)
+	for index in range(coins.size() - 1, -1, -1):
+		if bool(coins[index].get("collected", false)) or float(coins[index]["z"]) > COIN_REMOVAL_Z:
+			coins.remove_at(index)
 
 
 func change_lane(direction: int) -> void:
@@ -311,6 +327,18 @@ func _spawn_next_pattern(z_position: float) -> void:
 			})
 			_next_obstacle_id += 1
 		_next_row_id += 1
+	for pattern_coin in pattern.get("coins", []):
+		var coin_offset := float(pattern_coin["offset"])
+		last_offset = maxf(last_offset, coin_offset)
+		coins.append({
+			"id": _next_coin_id,
+			"pattern_id": pattern["id"],
+			"lane": pattern_coin["lane"],
+			"height": pattern_coin["height"],
+			"z": z_position - coin_offset,
+			"collected": false,
+		})
+		_next_coin_id += 1
 	next_spawn_z = z_position - last_offset - _row_spacing()
 
 
@@ -325,6 +353,21 @@ func _row_spacing() -> float:
 		1.0
 	)
 	return lerpf(TUNING.early_pattern_spacing, normal_spacing, early_ratio)
+
+
+func _collect_coins() -> void:
+	for coin in coins:
+		if bool(coin.get("collected", false)):
+			continue
+		if absf(float(coin["z"])) > COIN_COLLECTION_Z_RADIUS:
+			continue
+		if absf(current_x - lane_x(int(coin["lane"]))) > COIN_COLLECTION_X_RADIUS:
+			continue
+		if absf(player_y - float(coin["height"])) > COIN_COLLECTION_HEIGHT_RADIUS:
+			continue
+		coin["collected"] = true
+		run_coin_count += 1
+		_events.append({"type": "coin_collected", "coin_id": int(coin["id"])})
 
 
 func _has_collision() -> bool:

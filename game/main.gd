@@ -14,6 +14,11 @@ const SETTINGS_ICON: Texture2D = preload("res://assets/icons/settings.svg")
 const SAVE_PATH := "user://dog_run.cfg"
 const FIRST_LAUNCH_TUTORIAL_TEXT := "SWIPE LEFT / RIGHT TO MOVE\nSWIPE UP TO JUMP\nSWIPE DOWN TO DUCK\n\nTap to Start"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
+const MAX_COIN_NODES := 128
+const COIN_COLOR := Color(1.0, 0.78, 0.08)
+const COIN_RADIUS := 0.42
+const COIN_THICKNESS := 0.12
+const COIN_ROTATION_SPEED := 2.4
 const OBSTACLE_OPACITY := 0.4
 const PLAYER_TEXTURE_UV_SCALE := Vector3(4.0, 1.0, 1.0)
 const PLAYER_TEXTURE_UV_OFFSET := Vector3(-1.5, 0.0, 0.0)
@@ -30,6 +35,7 @@ var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
 var performance_monitor = PerformanceMonitor.new()
 var high_score := 0
+var _total_coins := 0
 var _save_path := SAVE_PATH
 var _tutorial_completed := false
 var _sound_enabled := DEFAULT_SOUND_ENABLED
@@ -39,6 +45,8 @@ var _pointer_start := Vector2.ZERO
 var _pointer_tracking := false
 var _obstacle_nodes := {}
 var _obstacle_pool: Array[MeshInstance3D] = []
+var _coin_nodes := {}
+var _coin_pool: Array[MeshInstance3D] = []
 
 var _player_visual_pivot: Node3D
 var _player: MeshInstance3D
@@ -49,6 +57,7 @@ var _hud_font: FontFile
 var _score_stack: VBoxContainer
 var _score_label: Label
 var _multiplier_label: Label
+var _coin_label: Label
 var _start_title_label: Label
 var _overlay_label: Label
 var _run_summary: VBoxContainer
@@ -89,11 +98,13 @@ func _process(delta: float) -> void:
 	var events := simulation.drain_events()
 	_feedback.handle_events(events, _player_visual_pivot.position)
 	_handle_player_feedback_events(events)
+	_handle_coin_events(events)
 	if previous_state != simulation.state and simulation.state == Simulation.RunState.GAME_OVER:
 		_finish_run()
 
 	_update_player(delta)
 	_sync_obstacles()
+	_sync_coins(delta)
 	_update_hud()
 	performance_monitor.sample(delta, _obstacle_nodes.size())
 	var report := performance_monitor.take_report()
@@ -342,6 +353,18 @@ func _build_hud() -> void:
 	_score_stack.offset_right = -24.0
 	_score_stack.offset_bottom = 150.0
 	root.add_child(_score_stack)
+
+	_coin_label = Label.new()
+	_coin_label.name = "CoinLabel"
+	_coin_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_coin_label.offset_left = 0.0
+	_coin_label.offset_top = 0.0
+	_coin_label.offset_right = 320.0
+	_coin_label.offset_bottom = 64.0
+	_coin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_style_label(_coin_label, 28)
+	_coin_label.add_theme_color_override("font_color", COIN_COLOR)
+	root.add_child(_coin_label)
 
 	_score_label = Label.new()
 	_score_label.name = "ScoreLabel"
@@ -664,10 +687,24 @@ func _make_obstacle_material(color: Color) -> ShaderMaterial:
 	return material
 
 
+func _make_coin_material() -> StandardMaterial3D:
+	var material := _make_material(COIN_COLOR, true)
+	material.roughness = 0.35
+	return material
+
+
 func _handle_player_feedback_events(events: Array) -> void:
 	for event in events:
 		if event["type"] == "landed":
 			_landing_pulse_time = TUNING.landing_pulse_duration
+
+
+func _handle_coin_events(events: Array) -> void:
+	for event in events:
+		if event["type"] != "coin_collected":
+			continue
+		_total_coins += 1
+		_save_progress()
 
 
 func _update_player(delta: float) -> void:
@@ -796,9 +833,73 @@ func _obstacle_y(obstacle_type: int) -> float:
 	return 0.0
 
 
+func _sync_coins(delta: float) -> void:
+	var active_ids := {}
+	for coin in simulation.coins:
+		if bool(coin.get("collected", false)):
+			continue
+		var coin_id: int = coin["id"]
+		active_ids[coin_id] = true
+
+		var mesh_instance: MeshInstance3D
+		if _coin_nodes.has(coin_id):
+			mesh_instance = _coin_nodes[coin_id]
+		else:
+			mesh_instance = _acquire_coin()
+			if mesh_instance == null:
+				continue
+			_coin_nodes[coin_id] = mesh_instance
+
+		mesh_instance.position = Vector3(
+			simulation.lane_x(int(coin["lane"])),
+			0.75 + float(coin["height"]),
+			float(coin["z"]) + TUNING.visual_action_plane_z
+		)
+		mesh_instance.rotation.x = PI * 0.5
+		mesh_instance.rotation.y = fposmod(mesh_instance.rotation.y + COIN_ROTATION_SPEED * delta, TAU)
+		mesh_instance.visible = true
+
+	for coin_id in _coin_nodes.keys():
+		if active_ids.has(coin_id):
+			continue
+		var mesh_instance: MeshInstance3D = _coin_nodes[coin_id]
+		_coin_nodes.erase(coin_id)
+		mesh_instance.visible = false
+		_coin_pool.append(mesh_instance)
+
+
+func _acquire_coin() -> MeshInstance3D:
+	if not _coin_pool.is_empty():
+		return _coin_pool.pop_back()
+	if _coin_nodes.size() + _coin_pool.size() >= MAX_COIN_NODES:
+		return null
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "Coin"
+	_configure_coin(mesh_instance)
+	add_child(mesh_instance)
+	return mesh_instance
+
+
+func _configure_coin(mesh_instance: MeshInstance3D) -> void:
+	var coin_mesh := CylinderMesh.new()
+	coin_mesh.top_radius = COIN_RADIUS
+	coin_mesh.bottom_radius = COIN_RADIUS
+	coin_mesh.height = COIN_THICKNESS
+	coin_mesh.radial_segments = 32
+	coin_mesh.rings = 1
+	mesh_instance.mesh = coin_mesh
+	mesh_instance.material_override = _make_coin_material()
+
+
 func _update_hud() -> void:
 	_score_label.text = str(simulation.score())
 	_multiplier_label.text = "x%d" % simulation.multiplier
+	_coin_label.text = "COINS %d" % _total_coins
+	_coin_label.visible = (
+		simulation.state == Simulation.RunState.READY
+		or simulation.state == Simulation.RunState.RUNNING
+		or simulation.state == Simulation.RunState.GAME_OVER
+	)
 	_score_stack.visible = simulation.state == Simulation.RunState.RUNNING
 	_run_summary.visible = false
 	_start_title_label.visible = false
@@ -837,6 +938,7 @@ func _finish_run() -> void:
 func _save_progress() -> void:
 	var config := ConfigFile.new()
 	config.set_value("scores", "high_score", high_score)
+	config.set_value("currency", "coins", _total_coins)
 	config.set_value("progress", "tutorial_completed", _tutorial_completed)
 	config.set_value("settings", "sound_enabled", _sound_enabled)
 	config.set_value("settings", "sound_volume", _sound_volume)
@@ -847,6 +949,7 @@ func _load_progress() -> void:
 	var config := ConfigFile.new()
 	if config.load(_save_path) == OK:
 		high_score = int(config.get_value("scores", "high_score", 0))
+		_total_coins = int(config.get_value("currency", "coins", 0))
 		_tutorial_completed = bool(config.get_value("progress", "tutorial_completed", false))
 		_sound_enabled = bool(config.get_value("settings", "sound_enabled", DEFAULT_SOUND_ENABLED))
 		_sound_volume = clampf(float(config.get_value("settings", "sound_volume", DEFAULT_SOUND_VOLUME)), 0.0, 1.0)
