@@ -291,7 +291,7 @@ func _build_hud() -> void:
 	_start_title_label.offset_bottom = -30.0
 	_start_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_start_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_style_label(_start_title_label, 72)
+	_style_label(_start_title_label, 44)
 	root.add_child(_start_title_label)
 
 	_overlay_label = Label.new()
