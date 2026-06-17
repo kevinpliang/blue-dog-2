@@ -8,7 +8,8 @@ Add a simple settings panel that lets players control gameplay sound from the ma
 
 - Show a rounded-square settings button in the top-right on the main menu and game-over screen.
 - Hide the settings button during active runs and impact/gameplay states.
-- Draw a simple settings-style icon in code inside the button instead of relying on a Unicode glyph.
+- Use a checked-in Material settings SVG at `assets/icons/settings.svg` inside the button.
+- Keep the rounded-square button background in Godot UI so the icon asset stays simple.
 
 ## Panel
 
@@ -51,6 +52,7 @@ Existing saves that do not contain these values load as sound `ON` and volume `1
 
 Smoke tests verify:
 
+- The Material settings SVG is available and used by the settings button.
 - The settings button appears on the ready and game-over screens.
 - The settings button hides during active runs.
 - Opening settings shows the modal panel.
