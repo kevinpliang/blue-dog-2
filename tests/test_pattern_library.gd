@@ -3,6 +3,7 @@ extends RefCounted
 const PatternLibrary = preload("res://game/pattern_library.gd")
 const Validator = preload("res://game/reachability_validator.gd")
 const REQUIRED_CONSECUTIVE_WALL_ROW_SPACING := 8.0
+const REQUIRED_COIN_WALL_CLEARANCE := 1.0
 const NEW_PATTERN_TIERS := {
 	"jump_wall_duck_gate": 1,
 	"duck_wall_jump_gate": 1,
@@ -35,9 +36,51 @@ func run_all() -> Array[String]:
 	expect_true(tier_counts[0] >= 4, "tier zero has introduction patterns")
 	expect_true(tier_counts[1] >= 5, "tier one has choice patterns")
 	expect_true(tier_counts[2] >= 5, "tier two has mixed patterns")
+	test_coin_placements_avoid_nearby_walls()
+	test_action_coin_lanes_are_varied()
 	test_consecutive_wall_rows_have_reaction_space()
 	test_balanced_expansion_patterns()
 	return failures
+
+
+func test_coin_placements_avoid_nearby_walls() -> void:
+	for pattern in PatternLibrary.all_patterns():
+		for coin in pattern.get("coins", []):
+			for row in pattern["rows"]:
+				if absf(float(coin["offset"]) - float(row["offset"])) > REQUIRED_COIN_WALL_CLEARANCE:
+					continue
+				for obstacle in row["obstacles"]:
+					if int(obstacle["type"]) != PatternLibrary.WALL:
+						continue
+					expect_true(
+						int(coin["lane"]) != int(obstacle["lane"]),
+						"pattern %s keeps coins out of nearby wall lanes" % pattern["id"]
+					)
+
+
+func test_action_coin_lanes_are_varied() -> void:
+	var expected_lanes := {
+		"jump_left_center": 0,
+		"jump_center_right": 2,
+		"duck_left_center": 0,
+		"duck_center_right": 2,
+	}
+	var patterns_by_id := {}
+	for pattern in PatternLibrary.all_patterns():
+		patterns_by_id[pattern["id"]] = pattern
+
+	for pattern_id in expected_lanes:
+		expect_true(patterns_by_id.has(pattern_id), "%s exists" % pattern_id)
+		if not patterns_by_id.has(pattern_id):
+			continue
+		var coins: Array = patterns_by_id[pattern_id].get("coins", [])
+		expect_true(not coins.is_empty(), "%s has an action coin" % pattern_id)
+		if coins.is_empty():
+			continue
+		expect_true(
+			int(coins[0]["lane"]) == expected_lanes[pattern_id],
+			"%s action coin uses the intended lane" % pattern_id
+		)
 
 
 func test_consecutive_wall_rows_have_reaction_space() -> void:

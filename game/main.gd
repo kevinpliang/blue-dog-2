@@ -16,6 +16,7 @@ const FIRST_LAUNCH_TUTORIAL_TEXT := "SWIPE LEFT / RIGHT TO MOVE\nSWIPE UP TO JUM
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
 const MAX_COIN_NODES := 128
 const COIN_COLOR := Color(1.0, 0.78, 0.08)
+const COIN_OPACITY := 0.68
 const COIN_RADIUS := 0.42
 const COIN_THICKNESS := 0.12
 const COIN_ROTATION_SPEED := 2.4
@@ -26,10 +27,12 @@ const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
 const DEFAULT_SOUND_ENABLED := true
 const DEFAULT_SOUND_VOLUME := 1.0
+const HUD_EDGE_MARGIN := 0.0
+const HUD_TEXT_TOP_ADJUSTMENT := -14.0
 const SETTINGS_BUTTON_SIZE := 96.0
 const SETTINGS_ICON_MAX_WIDTH := 64.0
-const SETTINGS_BUTTON_TOP_MARGIN := 8.0
-const SETTINGS_BUTTON_RIGHT_MARGIN := 16.0
+const SETTINGS_BUTTON_TOP_MARGIN := HUD_EDGE_MARGIN
+const SETTINGS_BUTTON_RIGHT_MARGIN := HUD_EDGE_MARGIN
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
@@ -349,20 +352,20 @@ func _build_hud() -> void:
 	_score_stack.name = "ScoreStack"
 	_score_stack.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_score_stack.offset_left = -400.0
-	_score_stack.offset_top = 0.0
-	_score_stack.offset_right = -24.0
-	_score_stack.offset_bottom = 150.0
+	_score_stack.offset_top = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT
+	_score_stack.offset_right = -HUD_EDGE_MARGIN
+	_score_stack.offset_bottom = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT + 150.0
 	root.add_child(_score_stack)
 
 	_coin_label = Label.new()
 	_coin_label.name = "CoinLabel"
 	_coin_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_coin_label.offset_left = 0.0
-	_coin_label.offset_top = 0.0
-	_coin_label.offset_right = 320.0
-	_coin_label.offset_bottom = 64.0
+	_coin_label.offset_left = HUD_EDGE_MARGIN
+	_coin_label.offset_top = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT + 20
+	_coin_label.offset_right = HUD_EDGE_MARGIN + 420.0
+	_coin_label.offset_bottom = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT + 110.0
 	_coin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_style_label(_coin_label, 28)
+	_style_label(_coin_label, 32)
 	_coin_label.add_theme_color_override("font_color", COIN_COLOR)
 	root.add_child(_coin_label)
 
@@ -375,7 +378,7 @@ func _build_hud() -> void:
 	_multiplier_label = Label.new()
 	_multiplier_label.name = "MultiplierLabel"
 	_multiplier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_style_label(_multiplier_label, 24)
+	_style_label(_multiplier_label, 32)
 	_multiplier_label.add_theme_color_override("font_color", Color(0.0, 0.85, 1.0))
 	_score_stack.add_child(_multiplier_label)
 
@@ -442,7 +445,6 @@ func _build_hud() -> void:
 	summary_margin.add_child(summary_grid)
 	_add_summary_row(summary_grid, "distance", "DISTANCE")
 	_add_summary_row(summary_grid, "peak_multiplier", "PEAK MULTIPLIER")
-	_add_summary_row(summary_grid, "near_misses", "NEAR MISSES")
 	_add_summary_row(summary_grid, "score", "SCORE")
 	_add_summary_row(summary_grid, "high_score", "HIGH SCORE")
 
@@ -688,7 +690,7 @@ func _make_obstacle_material(color: Color) -> ShaderMaterial:
 
 
 func _make_coin_material() -> StandardMaterial3D:
-	var material := _make_material(COIN_COLOR, true)
+	var material := _make_material(COIN_COLOR, true, COIN_OPACITY)
 	material.roughness = 0.35
 	return material
 
@@ -894,7 +896,7 @@ func _configure_coin(mesh_instance: MeshInstance3D) -> void:
 func _update_hud() -> void:
 	_score_label.text = str(simulation.score())
 	_multiplier_label.text = "x%d" % simulation.multiplier
-	_coin_label.text = "COINS %d" % _total_coins
+	_coin_label.text = "$%d" % _total_coins
 	_coin_label.visible = (
 		simulation.state == Simulation.RunState.READY
 		or simulation.state == Simulation.RunState.RUNNING
@@ -918,7 +920,6 @@ func _update_hud() -> void:
 			_new_high_score_label.visible = _new_high_score
 			_run_summary_values["distance"].text = "%dm" % simulation.distance_score()
 			_run_summary_values["peak_multiplier"].text = "x%d" % simulation.peak_multiplier
-			_run_summary_values["near_misses"].text = str(simulation.near_miss_count)
 			_run_summary_values["score"].text = str(simulation.final_score())
 			_run_summary_values["high_score"].text = str(high_score)
 			_run_summary.visible = true

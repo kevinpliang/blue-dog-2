@@ -13,6 +13,7 @@ func _init() -> void:
 		"lane_changed": _tone(320.0, 0.06, 0.12),
 		"near_miss": _tone(760.0, 0.12, 0.18),
 		"collision": _tone(90.0, 0.30, 0.35),
+		"coin_collected": _tone(980.0, 0.07, 0.16),
 	}
 
 

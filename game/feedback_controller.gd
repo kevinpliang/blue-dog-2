@@ -11,6 +11,10 @@ const SHAKE_STRENGTH := 0.12
 const HAPTICS_ENABLED := true
 const AUDIO_ENABLED := true
 const BASE_AUDIO_VOLUME_DB := -8.0
+const SILENT_EVENT_TYPES := {
+	"obstacle_cleared": true,
+	"near_miss": true,
+}
 
 var shake_time := 0.0
 var sound_enabled := true
@@ -85,8 +89,6 @@ func handle_events(events: Array[Dictionary], player_position: Vector3) -> void:
 				shake_time = TUNING.shake_duration
 				_spawn_impact(player_position)
 				_vibrate(90)
-			"near_miss":
-				_vibrate(20)
 		_play_cue(type)
 
 
@@ -146,6 +148,8 @@ func _spawn_impact(position: Vector3) -> void:
 
 
 func _play_cue(type: String) -> void:
+	if SILENT_EVENT_TYPES.has(type):
+		return
 	if not TUNING.audio_enabled or not sound_enabled or sound_volume <= 0.0 or _audio_players.is_empty():
 		return
 	var cue := _audio_library.cue(type)

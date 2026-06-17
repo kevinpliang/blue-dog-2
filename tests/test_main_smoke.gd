@@ -127,7 +127,22 @@ func _uses_adaptive_fullscreen_layout() -> bool:
 	if _main._camera.keep_aspect != Camera3D.KEEP_WIDTH:
 		return false
 	var score_stack: VBoxContainer = _main.find_child("ScoreStack", true, false)
-	if score_stack == null or not is_zero_approx(score_stack.offset_top):
+	var coin_label: Label = _main.find_child("CoinLabel", true, false)
+	var settings_button: Button = _main.find_child("SettingsButton", true, false)
+	if score_stack == null or coin_label == null or settings_button == null:
+		return false
+	var text_top := MainScript.HUD_EDGE_MARGIN + MainScript.HUD_TEXT_TOP_ADJUSTMENT
+	if not is_equal_approx(score_stack.offset_top, text_top):
+		return false
+	if not is_equal_approx(score_stack.offset_right, -MainScript.HUD_EDGE_MARGIN):
+		return false
+	if not is_equal_approx(coin_label.offset_left, MainScript.HUD_EDGE_MARGIN):
+		return false
+	if not is_equal_approx(coin_label.offset_top, text_top):
+		return false
+	if not is_equal_approx(settings_button.offset_top, MainScript.HUD_EDGE_MARGIN):
+		return false
+	if not is_equal_approx(settings_button.offset_right, -MainScript.HUD_EDGE_MARGIN):
 		return false
 	return true
 
@@ -136,13 +151,17 @@ func _uses_refreshed_hud() -> bool:
 	var score_stack: VBoxContainer = _main.find_child("ScoreStack", true, false)
 	var score_label: Label = _main.find_child("ScoreLabel", true, false)
 	var multiplier_label: Label = _main.find_child("MultiplierLabel", true, false)
+	var coin_label: Label = _main.find_child("CoinLabel", true, false)
 	var summary: VBoxContainer = _main.find_child("RunSummary", true, false)
 	var summary_grid: GridContainer = _main.find_child("RunSummaryGrid", true, false)
 	var new_high_score_label: Label = _main.find_child("NewHighScoreLabel", true, false)
 	var high_score_value: Label = _main.find_child("SummaryHighScoreValue", true, false)
-	if score_stack == null or score_label == null or multiplier_label == null:
+	var near_misses_value: Label = _main.find_child("SummaryNearMissesValue", true, false)
+	if score_stack == null or score_label == null or multiplier_label == null or coin_label == null:
 		return false
 	if summary == null or summary_grid == null or new_high_score_label == null or high_score_value == null:
+		return false
+	if near_misses_value != null:
 		return false
 	if not score_stack.visible or summary.visible or summary_grid.columns != 2:
 		return false
@@ -151,6 +170,8 @@ func _uses_refreshed_hud() -> bool:
 	if score_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_RIGHT:
 		return false
 	if multiplier_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_RIGHT:
+		return false
+	if coin_label.get_theme_font_size("font_size") != score_label.get_theme_font_size("font_size"):
 		return false
 	var hud_font: FontFile = _main.get("_hud_font")
 	if hud_font == null or hud_font.resource_path != "res://assets/fonts/Michroma-Regular.ttf":
@@ -161,6 +182,10 @@ func _uses_refreshed_hud() -> bool:
 		if label.get_theme_font("font") != hud_font:
 			return false
 	if _main.find_child("HighScoreLabel", true, false) != null:
+		return false
+	_main._total_coins = 123
+	_main._update_hud()
+	if coin_label.text != "$123":
 		return false
 
 	var tutorial_save_path := "user://dog_run_hud_smoke.cfg"
