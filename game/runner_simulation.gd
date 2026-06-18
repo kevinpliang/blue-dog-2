@@ -156,7 +156,7 @@ func change_lane(direction: int) -> void:
 func jump() -> void:
 	if state != RunState.RUNNING:
 		return
-	if is_air_ducking() or air_duck_landing_roll:
+	if is_air_ducking():
 		return
 	if not is_grounded():
 		jump_buffer_time = TUNING.input_buffer_duration

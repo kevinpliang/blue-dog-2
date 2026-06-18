@@ -10,7 +10,7 @@ func run_all() -> Array[String]:
 	test_jump_and_duck_rules()
 	test_airborne_duck_dives_and_transitions_to_roll()
 	test_airborne_duck_uses_duck_collision_rules()
-	test_airborne_duck_blocks_jump_but_allows_lane_changes()
+	test_airborne_duck_blocks_jump_during_dive_but_landing_roll_can_jump()
 	test_duck_has_a_cooldown()
 	test_duck_timing_remains_intentional()
 	test_early_jump_runs_on_landing()
@@ -115,7 +115,7 @@ func test_airborne_duck_uses_duck_collision_rules() -> void:
 	expect_equal(ground.state, Simulation.RunState.IMPACT, "airborne duck still collides with a low ground block")
 
 
-func test_airborne_duck_blocks_jump_but_allows_lane_changes() -> void:
+func test_airborne_duck_blocks_jump_during_dive_but_landing_roll_can_jump() -> void:
 	var simulation = Simulation.new()
 	simulation.start(35)
 	clear_obstacles(simulation)
@@ -131,12 +131,12 @@ func test_airborne_duck_blocks_jump_but_allows_lane_changes() -> void:
 	expect_equal(simulation.target_lane, 2, "lane changes remain available during the dive")
 
 	simulation.step(simulation.TUNING.air_duck_dive_duration + 0.001)
-	var roll_time: float = simulation.duck_time
+	expect_true(simulation.duck_time > 0.0, "airborne duck landing starts a roll")
 	simulation.jump()
-	simulation.duck()
 	expect_equal(simulation.jump_buffer_time, 0.0, "jump is not buffered during the landing roll")
-	expect_equal(simulation.vertical_velocity, 0.0, "landing roll does not immediately jump")
-	expect_equal(simulation.duck_time, roll_time, "repeated duck does not restart the landing roll")
+	expect_true(simulation.vertical_velocity > 0.0, "landing roll can be jump-cancelled like an ordinary duck")
+	expect_equal(simulation.duck_time, 0.0, "jump cancels the landing roll")
+	expect_true(not simulation.air_duck_landing_roll, "jump clears the landing roll flag")
 
 	var grounded_duck = Simulation.new()
 	grounded_duck.start(38)

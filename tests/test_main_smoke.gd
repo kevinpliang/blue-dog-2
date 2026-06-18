@@ -1,6 +1,9 @@
 extends SceneTree
 
 const MainScript = preload("res://game/main.gd")
+const Simulation = preload("res://game/runner_simulation.gd")
+const PatternLibrary = preload("res://game/pattern_library.gd")
+const Validator = preload("res://game/reachability_validator.gd")
 
 var _main: Node
 var _frames := 0
@@ -44,6 +47,9 @@ func _process(_delta: float) -> bool:
 	elif not _uses_sound_settings_panel():
 		push_error("Main scene does not include the sound settings panel.")
 		quit(1)
+	elif not _uses_character_selection_menu():
+		push_error("Main scene does not include the character selection menu.")
+		quit(1)
 	elif not _uses_moderate_lower_third_framing():
 		push_error("Main scene does not use the tuned moderate lower-third framing.")
 		quit(1)
@@ -55,6 +61,9 @@ func _process(_delta: float) -> bool:
 		quit(1)
 	elif not _uses_airborne_duck_visual():
 		push_error("Main scene does not show the compact airborne duck roll.")
+		quit(1)
+	elif not _allows_jump_after_air_duck_roll():
+		push_error("Airborne duck landing roll cannot be jump-cancelled.")
 		quit(1)
 	elif _main.find_child("HudSafeArea", true, false) == null:
 		push_error("Main scene does not include a HUD safe-area container.")
@@ -70,6 +79,9 @@ func _process(_delta: float) -> bool:
 		quit(1)
 	elif _main.find_child("RunSummary", true, false) == null:
 		push_error("Main scene does not include game-over summary.")
+		quit(1)
+	elif not _uses_more_interesting_patterns():
+		push_error("Pattern library does not include the new non-air-duck pattern batch.")
 		quit(1)
 	elif not _uses_first_launch_tutorial():
 		push_error("Main scene does not show and persist the first-launch tutorial.")
@@ -138,7 +150,7 @@ func _uses_adaptive_fullscreen_layout() -> bool:
 		return false
 	if not is_equal_approx(coin_label.offset_left, MainScript.HUD_EDGE_MARGIN):
 		return false
-	if not is_equal_approx(coin_label.offset_top, text_top):
+	if not is_equal_approx(coin_label.offset_top, text_top + MainScript.COIN_LABEL_TOP_OFFSET):
 		return false
 	if not is_equal_approx(settings_button.offset_top, MainScript.HUD_EDGE_MARGIN):
 		return false
@@ -171,7 +183,7 @@ func _uses_refreshed_hud() -> bool:
 		return false
 	if multiplier_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_RIGHT:
 		return false
-	if coin_label.get_theme_font_size("font_size") != score_label.get_theme_font_size("font_size"):
+	if coin_label.get_theme_font_size("font_size") != MainScript.COIN_LABEL_FONT_SIZE:
 		return false
 	var hud_font: FontFile = _main.get("_hud_font")
 	if hud_font == null or hud_font.resource_path != "res://assets/fonts/Michroma-Regular.ttf":
@@ -261,8 +273,10 @@ func _uses_sound_settings_panel() -> bool:
 	_main._set_sound_enabled(false)
 	_main._set_sound_volume(0.35)
 	_main._save_progress()
-	_main._set_sound_enabled(true)
-	_main._set_sound_volume(1.0)
+	_main._sound_enabled = true
+	_main._sound_volume = 1.0
+	_main._apply_sound_settings()
+	_main._sync_settings_controls()
 	_main._load_progress()
 	if _main._sound_enabled or not is_equal_approx(_main._sound_volume, 0.35):
 		DirAccess.remove_absolute(absolute_path)
@@ -288,6 +302,210 @@ func _uses_sound_settings_panel() -> bool:
 	_main.simulation.state = _main.simulation.RunState.RUNNING
 	_main._update_hud()
 	DirAccess.remove_absolute(absolute_path)
+	return visible_on_game_over
+
+
+func _uses_character_selection_menu() -> bool:
+	var button: Button = _main.find_child("CharacterButton", true, false)
+	var settings_button: Button = _main.find_child("SettingsButton", true, false)
+	var panel: Control = _main.find_child("CharacterPanel", true, false)
+	var blocker: Control = _main.find_child("CharacterModalBlocker", true, false)
+	var grid: GridContainer = _main.find_child("CharacterGrid", true, false)
+	var card: Button = _main.find_child("CharacterCardDog", true, false)
+	var bear_card: Button = _main.find_child("CharacterCardBear", true, false)
+	var bear_cost_label: Label = _main.find_child("CharacterCostBearLabel", true, false)
+	var bear_locked_preview: Control = _main.find_child("CharacterLockedBearPreview", true, false)
+	var bear_locked_pivot: Node3D = _main.find_child("CharacterLockedBearPivot", true, false)
+	var bear_locked_sphere: MeshInstance3D = _main.find_child("CharacterLockedBearSphere", true, false)
+	var bear_preview_sphere: MeshInstance3D = _main.find_child("CharacterPreviewBearSphere", true, false)
+	var bear_status_label: Label = _main.find_child("CharacterStatusBearLabel", true, false)
+	var close_button: Button = _main.find_child("CloseCharacterButton", true, false)
+	var selected_label: Label = _main.find_child("CharacterSelectedLabel", true, false)
+	var preview_container: SubViewportContainer = _main.find_child("CharacterPreviewDogContainer", true, false)
+	var preview_pivot: Node3D = _main.find_child("CharacterPreviewDogPivot", true, false)
+	var preview_sphere: MeshInstance3D = _main.find_child("CharacterPreviewDogSphere", true, false)
+	var preview_camera: Camera3D = _main.find_child("CharacterPreviewDogCamera", true, false)
+	var preview_viewport: SubViewport = _main.find_child("CharacterPreviewDogViewport", true, false)
+	if button == null or settings_button == null or panel == null or blocker == null or grid == null:
+		return false
+	if card == null or close_button == null or selected_label == null or preview_pivot == null:
+		return false
+	if bear_card == null or bear_cost_label == null or bear_locked_preview == null:
+		push_error("Character selector is missing the locked Bear card, cost label, or locked preview.")
+		return false
+	if bear_locked_pivot == null or bear_locked_sphere == null:
+		push_error("Locked Bear card should show a spinning black sphere preview.")
+		return false
+	if bear_preview_sphere == null or bear_status_label == null:
+		push_error("Character selector is missing the Bear preview sphere or status label.")
+		return false
+	if preview_container == null or preview_sphere == null or preview_camera == null or preview_viewport == null:
+		return false
+	if button.icon == null or button.icon.resource_path != "res://assets/icons/pets.svg":
+		return false
+	if button.size.x < MainScript.SETTINGS_BUTTON_SIZE or button.size.y < MainScript.SETTINGS_BUTTON_SIZE:
+		return false
+	if not is_equal_approx(button.offset_top, MainScript.CHARACTER_BUTTON_TOP_MARGIN):
+		return false
+	if button.offset_top <= settings_button.offset_top:
+		return false
+	if button.get_theme_constant("icon_max_width") != int(MainScript.SETTINGS_ICON_MAX_WIDTH):
+		return false
+	if card.custom_minimum_size != MainScript.CHARACTER_CARD_SIZE:
+		return false
+	if bear_card.custom_minimum_size != MainScript.CHARACTER_CARD_SIZE:
+		push_error("Bear card does not use the tuned character card size.")
+		return false
+	if preview_container.custom_minimum_size != MainScript.CHARACTER_PREVIEW_SIZE:
+		return false
+	if not preview_viewport.own_world_3d:
+		return false
+	if not preview_sphere.mesh is SphereMesh:
+		return false
+	var preview_mesh: SphereMesh = preview_sphere.mesh
+	if not is_equal_approx(preview_mesh.radius, MainScript.CHARACTER_PREVIEW_SPHERE_RADIUS):
+		return false
+	if not is_equal_approx(preview_camera.position.z, MainScript.CHARACTER_PREVIEW_CAMERA_Z):
+		return false
+	if not is_equal_approx(preview_camera.fov, MainScript.CHARACTER_PREVIEW_CAMERA_FOV):
+		return false
+	if grid.columns < 2:
+		return false
+	if grid.size_flags_horizontal != Control.SIZE_SHRINK_BEGIN:
+		return false
+	if not preview_sphere.material_override is StandardMaterial3D:
+		return false
+	var material: StandardMaterial3D = preview_sphere.material_override
+	if material.albedo_texture == null or material.albedo_texture.resource_path != "res://assets/player/white.png":
+		return false
+	if not bear_preview_sphere.material_override is StandardMaterial3D:
+		push_error("Bear preview sphere does not use a StandardMaterial3D.")
+		return false
+	var bear_material: StandardMaterial3D = bear_preview_sphere.material_override
+	if bear_material.albedo_texture == null or bear_material.albedo_texture.resource_path != "res://assets/player/bear.png":
+		push_error("Bear preview sphere does not use the Bear texture.")
+		return false
+	if not bear_locked_sphere.mesh is SphereMesh:
+		push_error("Locked Bear preview should use a sphere mesh.")
+		return false
+	if not bear_locked_sphere.material_override is StandardMaterial3D:
+		push_error("Locked Bear preview sphere does not use a StandardMaterial3D.")
+		return false
+	var locked_material: StandardMaterial3D = bear_locked_sphere.material_override
+	if locked_material.albedo_texture != null:
+		push_error("Locked Bear preview sphere should not show the Bear texture.")
+		return false
+	if locked_material.albedo_color.r > 0.02 or locked_material.albedo_color.g > 0.02 or locked_material.albedo_color.b > 0.02:
+		push_error("Locked Bear preview sphere should be black.")
+		return false
+	if bear_cost_label.text != "$500":
+		push_error("Bear locked card does not show the $500 unlock cost.")
+		return false
+
+	var character_save_path := "user://dog_run_characters_smoke.cfg"
+	var character_absolute_path := ProjectSettings.globalize_path(character_save_path)
+	DirAccess.remove_absolute(character_absolute_path)
+	_main._save_path = character_save_path
+	_main._selected_character_id = "dog"
+	_main._unlocked_character_ids = {"dog": true}
+	_main._total_coins = 499
+	_main._sync_character_controls()
+	_main.simulation.state = _main.simulation.RunState.READY
+	_main._update_hud()
+	if not button.visible or panel.visible or blocker.visible:
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+
+	_main._open_character_selection()
+	if not panel.visible or not blocker.visible:
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if _main.find_child("SettingsPanel", true, false).visible:
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if selected_label.text != "SELECTED":
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if bear_status_label.visible or not bear_cost_label.visible or not bear_locked_preview.visible:
+		push_error("Locked Bear card should show cost/locked preview and hide status.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if grid.get_child_count() < 2 or grid.get_child(0) != card or grid.get_child(1) != bear_card:
+		push_error("Dog and Bear cards should occupy the first two grid slots in order.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	var card_rect := card.get_global_rect()
+	var selected_rect := selected_label.get_global_rect()
+	if selected_rect.end.y > card_rect.end.y - 4.0:
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	var close_bottom_gap := panel.get_global_rect().end.y - close_button.get_global_rect().end.y
+	if close_bottom_gap > 64.0:
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	var rotation_before := preview_pivot.rotation.y
+	var locked_rotation_before := bear_locked_pivot.rotation.y
+	_main._update_character_previews(0.1)
+	if is_equal_approx(preview_pivot.rotation.y, rotation_before):
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if is_equal_approx(bear_locked_pivot.rotation.y, locked_rotation_before):
+		push_error("Locked Bear preview sphere should spin while the selector is open.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	_main._select_character("bear")
+	if _main.get("_selected_character_id") != "dog" or _main._total_coins != 499:
+		push_error("Locked Bear should not select or spend coins when the player cannot afford it.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	_main._total_coins = 500
+	_main._select_character("bear")
+	if _main.get("_selected_character_id") != "bear" or _main._total_coins != 0:
+		push_error("Affordable Bear should unlock, select, and deduct $500.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if bear_cost_label.visible or bear_locked_preview.visible or not bear_status_label.visible:
+		push_error("Unlocked Bear card should hide cost/locked preview and show status.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if bear_status_label.text != "SELECTED":
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	if not _main._player.material_override is StandardMaterial3D:
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	var selected_material: StandardMaterial3D = _main._player.material_override
+	if selected_material.albedo_texture == null or selected_material.albedo_texture.resource_path != "res://assets/player/bear.png":
+		push_error("Selecting Bear should apply the Bear texture to the player.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	_main._save_progress()
+	_main._selected_character_id = "dog"
+	_main._unlocked_character_ids = {"dog": true}
+	_main._total_coins = 123
+	_main._load_progress()
+	if _main.get("_selected_character_id") != "bear" or _main._total_coins != 0:
+		push_error("Bear unlock and selection should persist across progress load.")
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	_main._select_character("dog")
+	if _main.get("_selected_character_id") != "dog":
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+	_main._close_character_selection()
+
+	_main.simulation.state = _main.simulation.RunState.RUNNING
+	_main._update_hud()
+	if button.visible or panel.visible or blocker.visible:
+		DirAccess.remove_absolute(character_absolute_path)
+		return false
+
+	_main.simulation.state = _main.simulation.RunState.GAME_OVER
+	_main._update_hud()
+	var visible_on_game_over := button.visible and not panel.visible and not blocker.visible
+	_main.simulation.state = _main.simulation.RunState.RUNNING
+	_main._update_hud()
+	DirAccess.remove_absolute(character_absolute_path)
 	return visible_on_game_over
 
 
@@ -383,6 +601,49 @@ func _uses_airborne_duck_visual() -> bool:
 	_main.simulation.vertical_velocity = 0.0
 	_main.simulation.air_duck_time = 0.0
 	return uses_compact_pose and stays_airborne
+
+
+func _allows_jump_after_air_duck_roll() -> bool:
+	var simulation = Simulation.new()
+	simulation.start(3501)
+	simulation.obstacles.clear()
+	simulation.next_spawn_z = -10000.0
+
+	simulation.jump()
+	simulation.duck()
+	simulation.step(simulation.TUNING.air_duck_dive_duration + 0.001)
+	if simulation.duck_time <= 0.0:
+		return false
+
+	simulation.jump()
+	return simulation.vertical_velocity > 0.0 and simulation.duck_time == 0.0 and not simulation.air_duck_landing_roll
+
+
+func _uses_more_interesting_patterns() -> bool:
+	var expected_tiers := {
+		"left_choice_then_jump_gate": 1,
+		"right_choice_then_duck_gate": 1,
+		"center_slalom_jump_gate": 2,
+		"center_slalom_duck_gate": 2,
+		"jump_gate_lane_duck_gate": 2,
+		"duck_gate_lane_jump_gate": 2,
+	}
+	var patterns_by_id := {}
+	var validator = Validator.new()
+	for pattern in PatternLibrary.all_patterns():
+		patterns_by_id[pattern["id"]] = pattern
+	for pattern_id in expected_tiers:
+		if not patterns_by_id.has(pattern_id):
+			return false
+		if int(patterns_by_id[pattern_id]["tier"]) != expected_tiers[pattern_id]:
+			return false
+		if not validator.is_reachable(patterns_by_id[pattern_id], 24.0):
+			return false
+	var jump_duck: Dictionary = patterns_by_id["jump_gate_lane_duck_gate"]
+	if float(jump_duck["rows"][2]["offset"]) < PatternLibrary.MIN_JUMP_TO_DUCK_SPACING:
+		return false
+	var duck_jump: Dictionary = patterns_by_id["duck_gate_lane_jump_gate"]
+	return float(duck_jump["rows"][2]["offset"]) >= PatternLibrary.MIN_DUCK_TO_JUMP_SPACING
 
 
 func _uses_first_launch_tutorial() -> bool:

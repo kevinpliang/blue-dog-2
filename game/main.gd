@@ -9,8 +9,10 @@ const TUNING = preload("res://game/default_runner_tuning.tres")
 const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader")
 const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
 const PLAYER_TEXTURE = preload("res://assets/player/white.png")
+const BEAR_TEXTURE = preload("res://assets/player/bear.png")
 const HUD_FONT: FontFile = preload("res://assets/fonts/Michroma-Regular.ttf")
 const SETTINGS_ICON: Texture2D = preload("res://assets/icons/settings.svg")
+const PETS_ICON: Texture2D = preload("res://assets/icons/pets.svg")
 const SAVE_PATH := "user://dog_run.cfg"
 const FIRST_LAUNCH_TUTORIAL_TEXT := "SWIPE LEFT / RIGHT TO MOVE\nSWIPE UP TO JUMP\nSWIPE DOWN TO DUCK\n\nTap to Start"
 const MAX_OBSTACLE_NODES := LimitsScript.MAX_OBSTACLE_NODES
@@ -27,12 +29,35 @@ const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
 const DEFAULT_SOUND_ENABLED := true
 const DEFAULT_SOUND_VOLUME := 1.0
+const DEFAULT_CHARACTER_ID := "dog"
+const BEAR_CHARACTER_ID := "bear"
+const BEAR_CHARACTER_COST := 500
 const HUD_EDGE_MARGIN := 0.0
 const HUD_TEXT_TOP_ADJUSTMENT := -14.0
-const SETTINGS_BUTTON_SIZE := 96.0
+const COIN_LABEL_TOP_OFFSET := 20.0
+const COIN_LABEL_FONT_SIZE := 32
+const SETTINGS_BUTTON_SIZE := 112.0
 const SETTINGS_ICON_MAX_WIDTH := 64.0
+const MENU_BUTTON_SPACING := 14.0
 const SETTINGS_BUTTON_TOP_MARGIN := HUD_EDGE_MARGIN
 const SETTINGS_BUTTON_RIGHT_MARGIN := HUD_EDGE_MARGIN
+const CHARACTER_BUTTON_TOP_MARGIN := SETTINGS_BUTTON_TOP_MARGIN + SETTINGS_BUTTON_SIZE + MENU_BUTTON_SPACING
+const CHARACTER_PREVIEW_SPIN_SPEED := 1.35
+const CHARACTER_CARD_SIZE := Vector2(176.0, 176.0)
+const CHARACTER_PREVIEW_SIZE := Vector2(124.0, 124.0)
+const CHARACTER_PREVIEW_VIEWPORT_SIZE := Vector2i(220, 220)
+const CHARACTER_PREVIEW_SPHERE_RADIUS := 0.6
+const CHARACTER_PREVIEW_CAMERA_Z := 3.1
+const CHARACTER_PREVIEW_CAMERA_FOV := 36.0
+const CHARACTER_CARD_PREVIEW_TOP := 8.0
+const CHARACTER_CARD_SIDE_MARGIN := 8.0
+const CHARACTER_CARD_TITLE_HEIGHT := 24.0
+const CHARACTER_CARD_SELECTED_HEIGHT := 18.0
+const CHARACTER_CARD_BOTTOM_MARGIN := 6.0
+const CHARACTER_CARD_TITLE_FONT_SIZE := 18
+const CHARACTER_CARD_SELECTED_FONT_SIZE := 13
+const SETTINGS_PANEL_INNER_HEIGHT := 400.0
+const CHARACTER_PANEL_INNER_HEIGHT := 510.0
 
 var simulation = Simulation.new()
 var input_interpreter = InputInterpreter.new()
@@ -43,6 +68,8 @@ var _save_path := SAVE_PATH
 var _tutorial_completed := false
 var _sound_enabled := DEFAULT_SOUND_ENABLED
 var _sound_volume := DEFAULT_SOUND_VOLUME
+var _selected_character_id := DEFAULT_CHARACTER_ID
+var _unlocked_character_ids := {DEFAULT_CHARACTER_ID: true}
 var _app_paused := false
 var _pointer_start := Vector2.ZERO
 var _pointer_tracking := false
@@ -72,6 +99,18 @@ var _settings_panel: PanelContainer
 var _sound_toggle_button: Button
 var _volume_slider: HSlider
 var _volume_value_label: Label
+var _settings_close_button: Button
+var _character_button: Button
+var _character_modal_blocker: ColorRect
+var _character_panel: PanelContainer
+var _character_selected_label: Label
+var _character_close_button: Button
+var _character_cards := {}
+var _character_status_labels := {}
+var _character_cost_labels := {}
+var _character_locked_previews := {}
+var _character_unlocked_previews := {}
+var _character_preview_pivots: Array[Node3D] = []
 var _restart_fade: ColorRect
 var _previous_player_x := 0.0
 var _landing_pulse_time := 0.0
@@ -106,6 +145,7 @@ func _process(delta: float) -> void:
 		_finish_run()
 
 	_update_player(delta)
+	_update_character_previews(delta)
 	_sync_obstacles()
 	_sync_coins(delta)
 	_update_hud()
@@ -157,10 +197,13 @@ func advance_simulation(delta: float) -> void:
 
 
 func _handle_pointer_release(end_position: Vector2) -> void:
-	if _settings_open():
+	if _modal_open():
 		return
 	if _settings_button != null and _settings_button.visible and _settings_button.get_global_rect().has_point(end_position):
 		_open_settings()
+		return
+	if _character_button != null and _character_button.visible and _character_button.get_global_rect().has_point(end_position):
+		_open_character_selection()
 		return
 	var command: int = input_interpreter.interpret(
 		_pointer_start,
@@ -181,7 +224,7 @@ func _handle_pointer_release(end_position: Vector2) -> void:
 
 
 func _handle_tap() -> void:
-	if _settings_open():
+	if _modal_open():
 		return
 	if simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER:
 		if simulation.state == Simulation.RunState.READY and not _tutorial_completed:
@@ -199,9 +242,12 @@ func _open_settings() -> void:
 		return
 	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
 		return
+	_close_character_selection()
 	_sync_settings_controls()
 	_settings_modal_blocker.visible = true
 	_settings_panel.visible = true
+	if _settings_close_button != null:
+		_settings_close_button.visible = true
 
 
 func _close_settings() -> void:
@@ -209,10 +255,42 @@ func _close_settings() -> void:
 		_settings_panel.visible = false
 	if _settings_modal_blocker != null:
 		_settings_modal_blocker.visible = false
+	if _settings_close_button != null:
+		_settings_close_button.visible = false
 
 
 func _settings_open() -> bool:
 	return _settings_panel != null and _settings_panel.visible
+
+
+func _open_character_selection() -> void:
+	if _character_panel == null or _character_modal_blocker == null:
+		return
+	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
+		return
+	_close_settings()
+	_sync_character_controls()
+	_character_modal_blocker.visible = true
+	_character_panel.visible = true
+	if _character_close_button != null:
+		_character_close_button.visible = true
+
+
+func _close_character_selection() -> void:
+	if _character_panel != null:
+		_character_panel.visible = false
+	if _character_modal_blocker != null:
+		_character_modal_blocker.visible = false
+	if _character_close_button != null:
+		_character_close_button.visible = false
+
+
+func _character_selection_open() -> bool:
+	return _character_panel != null and _character_panel.visible
+
+
+func _modal_open() -> bool:
+	return _settings_open() or _character_selection_open()
 
 
 func _toggle_sound() -> void:
@@ -245,6 +323,86 @@ func _sync_settings_controls() -> void:
 		_volume_slider.set_value_no_signal(_sound_volume)
 	if _volume_value_label != null:
 		_volume_value_label.text = "%d%%" % roundi(_sound_volume * 100.0)
+
+
+func _known_character_ids() -> Array[String]:
+	return [DEFAULT_CHARACTER_ID, BEAR_CHARACTER_ID]
+
+
+func _is_known_character(character_id: String) -> bool:
+	return _known_character_ids().has(character_id)
+
+
+func _is_character_unlocked(character_id: String) -> bool:
+	return character_id == DEFAULT_CHARACTER_ID or bool(_unlocked_character_ids.get(character_id, false))
+
+
+func _character_cost(character_id: String) -> int:
+	match character_id:
+		BEAR_CHARACTER_ID:
+			return BEAR_CHARACTER_COST
+		_:
+			return 0
+
+
+func _character_title(character_id: String) -> String:
+	match character_id:
+		BEAR_CHARACTER_ID:
+			return "BEAR"
+		_:
+			return "DOG"
+
+
+func _character_texture(character_id: String) -> Texture2D:
+	match character_id:
+		BEAR_CHARACTER_ID:
+			return BEAR_TEXTURE
+		_:
+			return PLAYER_TEXTURE
+
+
+func _apply_selected_character_material() -> void:
+	if _player != null:
+		_player.material_override = _make_player_material(_selected_character_id)
+
+
+func _select_character(character_id: String) -> void:
+	if not _is_known_character(character_id):
+		return
+	if not _is_character_unlocked(character_id):
+		var cost := _character_cost(character_id)
+		if _total_coins < cost:
+			_sync_character_controls()
+			return
+		_total_coins -= cost
+		_unlocked_character_ids[character_id] = true
+	if not _is_character_unlocked(character_id):
+		return
+	_selected_character_id = character_id
+	_apply_selected_character_material()
+	_sync_character_controls()
+	_update_hud()
+	_save_progress()
+
+
+func _sync_character_controls() -> void:
+	for character_id in _character_cards.keys():
+		var unlocked := _is_character_unlocked(character_id)
+		var card: Button = _character_cards[character_id]
+		card.button_pressed = unlocked and character_id == _selected_character_id
+		if _character_status_labels.has(character_id):
+			var status_label: Label = _character_status_labels[character_id]
+			status_label.visible = unlocked
+			status_label.text = "SELECTED" if character_id == _selected_character_id else "SELECT"
+		if _character_cost_labels.has(character_id):
+			var cost_label: Label = _character_cost_labels[character_id]
+			cost_label.visible = not unlocked
+		if _character_locked_previews.has(character_id):
+			var locked_preview: Control = _character_locked_previews[character_id]
+			locked_preview.visible = not unlocked
+		if _character_unlocked_previews.has(character_id):
+			var unlocked_preview: Control = _character_unlocked_previews[character_id]
+			unlocked_preview.visible = unlocked
 
 
 func _handle_keyboard() -> void:
@@ -361,11 +519,11 @@ func _build_hud() -> void:
 	_coin_label.name = "CoinLabel"
 	_coin_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_coin_label.offset_left = HUD_EDGE_MARGIN
-	_coin_label.offset_top = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT + 20
+	_coin_label.offset_top = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT + COIN_LABEL_TOP_OFFSET
 	_coin_label.offset_right = HUD_EDGE_MARGIN + 420.0
-	_coin_label.offset_bottom = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT + 110.0
+	_coin_label.offset_bottom = HUD_EDGE_MARGIN + HUD_TEXT_TOP_ADJUSTMENT + COIN_LABEL_TOP_OFFSET + 90.0
 	_coin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_style_label(_coin_label, 32)
+	_style_label(_coin_label, COIN_LABEL_FONT_SIZE)
 	_coin_label.add_theme_color_override("font_color", COIN_COLOR)
 	root.add_child(_coin_label)
 
@@ -476,6 +634,27 @@ func _make_ui_box_style(background: Color, border: Color, radius: int) -> StyleB
 	return style
 
 
+func _make_menu_button(button_name: String, icon_texture: Texture2D, top_margin: float, pressed_callback: Callable) -> Button:
+	var button := Button.new()
+	button.name = button_name
+	button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	button.offset_left = -(SETTINGS_BUTTON_RIGHT_MARGIN + SETTINGS_BUTTON_SIZE)
+	button.offset_top = top_margin
+	button.offset_right = -SETTINGS_BUTTON_RIGHT_MARGIN
+	button.offset_bottom = top_margin + SETTINGS_BUTTON_SIZE
+	button.custom_minimum_size = Vector2(SETTINGS_BUTTON_SIZE, SETTINGS_BUTTON_SIZE)
+	button.icon = icon_texture
+	button.expand_icon = true
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_constant_override("icon_max_width", int(SETTINGS_ICON_MAX_WIDTH))
+	button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 18))
+	button.add_theme_stylebox_override("hover", _make_ui_box_style(Color(0.0, 0.18, 0.22, 0.72), Color(0.0, 0.95, 1.0), 18))
+	button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.35, 0.42, 0.85), Color.WHITE, 18))
+	button.pressed.connect(pressed_callback)
+	return button
+
+
 func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> void:
 	var title := Label.new()
 	title.text = title_text
@@ -493,24 +672,11 @@ func _add_summary_row(grid: GridContainer, key: String, title_text: String) -> v
 
 
 func _build_settings_ui(root: Control) -> void:
-	_settings_button = Button.new()
-	_settings_button.name = "SettingsButton"
-	_settings_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_settings_button.offset_left = -(SETTINGS_BUTTON_RIGHT_MARGIN + SETTINGS_BUTTON_SIZE)
-	_settings_button.offset_top = SETTINGS_BUTTON_TOP_MARGIN
-	_settings_button.offset_right = -SETTINGS_BUTTON_RIGHT_MARGIN
-	_settings_button.offset_bottom = SETTINGS_BUTTON_TOP_MARGIN + SETTINGS_BUTTON_SIZE
-	_settings_button.custom_minimum_size = Vector2(SETTINGS_BUTTON_SIZE, SETTINGS_BUTTON_SIZE)
-	_settings_button.icon = SETTINGS_ICON
-	_settings_button.expand_icon = true
-	_settings_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_settings_button.focus_mode = Control.FOCUS_NONE
-	_settings_button.add_theme_constant_override("icon_max_width", int(SETTINGS_ICON_MAX_WIDTH))
-	_settings_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 18))
-	_settings_button.add_theme_stylebox_override("hover", _make_ui_box_style(Color(0.0, 0.18, 0.22, 0.72), Color(0.0, 0.95, 1.0), 18))
-	_settings_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.35, 0.42, 0.85), Color.WHITE, 18))
-	_settings_button.pressed.connect(_open_settings)
+	_settings_button = _make_menu_button("SettingsButton", SETTINGS_ICON, SETTINGS_BUTTON_TOP_MARGIN, Callable(self, "_open_settings"))
 	root.add_child(_settings_button)
+
+	_character_button = _make_menu_button("CharacterButton", PETS_ICON, CHARACTER_BUTTON_TOP_MARGIN, Callable(self, "_open_character_selection"))
+	root.add_child(_character_button)
 
 	_settings_modal_blocker = ColorRect.new()
 	_settings_modal_blocker.name = "SettingsModalBlocker"
@@ -533,6 +699,7 @@ func _build_settings_ui(root: Control) -> void:
 	root.add_child(_settings_panel)
 
 	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_theme_constant_override("margin_left", 34)
@@ -542,7 +709,9 @@ func _build_settings_ui(root: Control) -> void:
 	_settings_panel.add_child(margin)
 
 	var stack := VBoxContainer.new()
+	stack.custom_minimum_size = Vector2(0.0, SETTINGS_PANEL_INNER_HEIGHT)
 	stack.add_theme_constant_override("separation", 22)
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(stack)
 
@@ -605,9 +774,257 @@ func _build_settings_ui(root: Control) -> void:
 	close_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 16))
 	close_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 16))
 	close_button.pressed.connect(_close_settings)
-	stack.add_child(close_button)
+	close_button.set_anchors_preset(Control.PRESET_CENTER)
+	close_button.offset_left = -246.0
+	close_button.offset_top = 156.0
+	close_button.offset_right = 246.0
+	close_button.offset_bottom = 200.0
+	close_button.visible = false
+	_settings_close_button = close_button
+	root.add_child(close_button)
+
+	_build_character_selection_ui(root)
 
 	_sync_settings_controls()
+	_sync_character_controls()
+
+
+func _build_character_selection_ui(root: Control) -> void:
+	_character_modal_blocker = ColorRect.new()
+	_character_modal_blocker.name = "CharacterModalBlocker"
+	_character_modal_blocker.color = Color(0.0, 0.0, 0.0, 0.5)
+	_character_modal_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	_character_modal_blocker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_character_modal_blocker.visible = false
+	root.add_child(_character_modal_blocker)
+
+	_character_panel = PanelContainer.new()
+	_character_panel.name = "CharacterPanel"
+	_character_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_character_panel.offset_left = -330.0
+	_character_panel.offset_top = -285.0
+	_character_panel.offset_right = 330.0
+	_character_panel.offset_bottom = 285.0
+	_character_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_character_panel.visible = false
+	_character_panel.add_theme_stylebox_override("panel", _make_ui_box_style(Color(0.0, 0.02, 0.04, 0.92), Color(0.0, 0.85, 1.0), 28))
+	root.add_child(_character_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_theme_constant_override("margin_left", 34)
+	margin.add_theme_constant_override("margin_top", 30)
+	margin.add_theme_constant_override("margin_right", 34)
+	margin.add_theme_constant_override("margin_bottom", 30)
+	_character_panel.add_child(margin)
+
+	var stack := VBoxContainer.new()
+	stack.custom_minimum_size = Vector2(0.0, CHARACTER_PANEL_INNER_HEIGHT)
+	stack.add_theme_constant_override("separation", 22)
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(stack)
+
+	var title := Label.new()
+	title.name = "CharacterTitleLabel"
+	title.text = "CHARACTERS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_style_label(title, 36)
+	stack.add_child(title)
+
+	var grid := GridContainer.new()
+	grid.name = "CharacterGrid"
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 22)
+	grid.add_theme_constant_override("v_separation", 22)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	stack.add_child(grid)
+
+	_add_character_card(grid, DEFAULT_CHARACTER_ID)
+	_add_character_card(grid, BEAR_CHARACTER_ID)
+
+	var spacer := Control.new()
+	spacer.name = "CharacterPanelSpacer"
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(spacer)
+
+	var close_button := Button.new()
+	close_button.name = "CloseCharacterButton"
+	close_button.text = "CLOSE"
+	close_button.focus_mode = Control.FOCUS_NONE
+	close_button.add_theme_font_override("font", _hud_font)
+	close_button.add_theme_font_size_override("font_size", 26)
+	close_button.add_theme_color_override("font_color", Color.WHITE)
+	close_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.0, 0.85, 1.0), 16))
+	close_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 16))
+	close_button.pressed.connect(_close_character_selection)
+	close_button.set_anchors_preset(Control.PRESET_CENTER)
+	close_button.offset_left = -296.0
+	close_button.offset_top = 211.0
+	close_button.offset_right = 296.0
+	close_button.offset_bottom = 255.0
+	close_button.visible = false
+	_character_close_button = close_button
+	root.add_child(close_button)
+
+
+func _add_character_card(grid: GridContainer, character_id: String) -> void:
+	var card := Button.new()
+	card.name = "CharacterCard%s" % character_id.to_pascal_case()
+	card.custom_minimum_size = CHARACTER_CARD_SIZE
+	card.focus_mode = Control.FOCUS_NONE
+	card.toggle_mode = true
+	card.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.08, 0.12, 0.75), Color(0.0, 0.85, 1.0), 22))
+	card.add_theme_stylebox_override("hover", _make_ui_box_style(Color(0.0, 0.18, 0.22, 0.84), Color(0.0, 0.95, 1.0), 22))
+	card.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 22))
+	card.add_theme_stylebox_override("disabled", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.55), Color(0.25, 0.25, 0.25), 22))
+	card.pressed.connect(Callable(self, "_select_character").bind(character_id))
+	_character_cards[character_id] = card
+	grid.add_child(card)
+
+	var preview := _build_character_preview(character_id)
+	_position_character_card_child(preview, CHARACTER_CARD_PREVIEW_TOP, CHARACTER_PREVIEW_SIZE)
+	card.add_child(preview)
+	_character_unlocked_previews[character_id] = preview
+
+	var cost := _character_cost(character_id)
+	if cost > 0:
+		var locked_preview := _build_locked_character_preview(character_id, cost)
+		_position_character_card_child(locked_preview, CHARACTER_CARD_PREVIEW_TOP, CHARACTER_PREVIEW_SIZE)
+		card.add_child(locked_preview)
+		_character_locked_previews[character_id] = locked_preview
+
+	var selected_top := CHARACTER_CARD_SIZE.y - CHARACTER_CARD_BOTTOM_MARGIN - CHARACTER_CARD_SELECTED_HEIGHT
+	var title_top := selected_top - CHARACTER_CARD_TITLE_HEIGHT
+
+	var title := Label.new()
+	title.name = "CharacterName%sLabel" % character_id.to_pascal_case()
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title.text = _character_title(character_id)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_style_label(title, CHARACTER_CARD_TITLE_FONT_SIZE)
+	_position_character_card_child(title, title_top, Vector2(
+		CHARACTER_CARD_SIZE.x - CHARACTER_CARD_SIDE_MARGIN * 2.0,
+		CHARACTER_CARD_TITLE_HEIGHT
+	))
+	card.add_child(title)
+
+	var status_label := Label.new()
+	status_label.name = "CharacterSelectedLabel" if character_id == DEFAULT_CHARACTER_ID else "CharacterStatus%sLabel" % character_id.to_pascal_case()
+	status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_style_label(status_label, CHARACTER_CARD_SELECTED_FONT_SIZE)
+	status_label.add_theme_color_override("font_color", Color(0.0, 0.85, 1.0))
+	_position_character_card_child(status_label, selected_top, Vector2(
+		CHARACTER_CARD_SIZE.x - CHARACTER_CARD_SIDE_MARGIN * 2.0,
+		CHARACTER_CARD_SELECTED_HEIGHT
+	))
+	card.add_child(status_label)
+	_character_status_labels[character_id] = status_label
+	if character_id == DEFAULT_CHARACTER_ID:
+		_character_selected_label = status_label
+
+
+func _position_character_card_child(control: Control, top: float, size: Vector2) -> void:
+	var left := (CHARACTER_CARD_SIZE.x - size.x) * 0.5
+	control.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	control.offset_left = left
+	control.offset_top = top
+	control.offset_right = left + size.x
+	control.offset_bottom = top + size.y
+
+
+func _build_character_preview(character_id: String, locked := false) -> SubViewportContainer:
+	var name_prefix := "CharacterLocked" if locked else "CharacterPreview"
+	var container := SubViewportContainer.new()
+	container.name = "%s%sContainer" % [name_prefix, character_id.to_pascal_case()]
+	container.custom_minimum_size = CHARACTER_PREVIEW_SIZE
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.stretch = true
+
+	var viewport := SubViewport.new()
+	viewport.name = "%s%sViewport" % [name_prefix, character_id.to_pascal_case()]
+	viewport.size = CHARACTER_PREVIEW_VIEWPORT_SIZE
+	viewport.own_world_3d = true
+	viewport.transparent_bg = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	container.add_child(viewport)
+
+	var world := Node3D.new()
+	viewport.add_child(world)
+
+	var environment_node := WorldEnvironment.new()
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color(0.0, 0.0, 0.0, 0.0)
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color(0.55, 0.62, 0.7)
+	environment.ambient_light_energy = 1.0
+	environment_node.environment = environment
+	world.add_child(environment_node)
+
+	var camera := Camera3D.new()
+	camera.name = "%s%sCamera" % [name_prefix, character_id.to_pascal_case()]
+	camera.position = Vector3(0.0, 0.0, CHARACTER_PREVIEW_CAMERA_Z)
+	camera.fov = CHARACTER_PREVIEW_CAMERA_FOV
+	camera.current = true
+	world.add_child(camera)
+	camera.look_at_from_position(camera.position, Vector3(0.0, 0.0, 0.0), Vector3.UP)
+
+	var light := OmniLight3D.new()
+	light.light_color = Color(0.75, 0.95, 1.0)
+	light.light_energy = 1.6
+	light.omni_range = 5.0
+	light.position = Vector3(0.0, 1.5, 2.0)
+	world.add_child(light)
+
+	var pivot := Node3D.new()
+	pivot.name = "%s%sPivot" % [name_prefix, character_id.to_pascal_case()]
+	pivot.position = Vector3(0.0, -0.05, 0.0)
+	world.add_child(pivot)
+	_character_preview_pivots.append(pivot)
+
+	var sphere_instance := MeshInstance3D.new()
+	sphere_instance.name = "%s%sSphere" % [name_prefix, character_id.to_pascal_case()]
+	var sphere := SphereMesh.new()
+	sphere.radius = CHARACTER_PREVIEW_SPHERE_RADIUS
+	sphere.height = CHARACTER_PREVIEW_SPHERE_RADIUS * 2.0
+	sphere.radial_segments = 20
+	sphere.rings = 12
+	sphere_instance.mesh = sphere
+	sphere_instance.material_override = _make_locked_character_material() if locked else _make_player_material(character_id)
+	sphere_instance.basis = Basis(Vector3.UP, PI)
+	pivot.add_child(sphere_instance)
+
+	return container
+
+
+func _build_locked_character_preview(character_id: String, cost: int) -> PanelContainer:
+	var locked := PanelContainer.new()
+	locked.name = "CharacterLocked%sPreview" % character_id.to_pascal_case()
+	locked.custom_minimum_size = CHARACTER_PREVIEW_SIZE
+	locked.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	locked.add_theme_stylebox_override("panel", _make_ui_box_style(Color(0.0, 0.0, 0.0, 0.0), Color(0.0, 0.0, 0.0, 0.0), 0))
+
+	var preview := _build_character_preview(character_id, true)
+	preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	locked.add_child(preview)
+
+	var cost_label := Label.new()
+	cost_label.name = "CharacterCost%sLabel" % character_id.to_pascal_case()
+	cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cost_label.text = "$%d" % cost
+	cost_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_style_label(cost_label, 24)
+	locked.add_child(cost_label)
+	_character_cost_labels[character_id] = cost_label
+	return locked
 
 
 func _add_box(size: Vector3, position: Vector3, color: Color, emission := false) -> MeshInstance3D:
@@ -671,12 +1088,18 @@ func _make_material(color: Color, emission := false, opacity := 1.0) -> Standard
 	return material
 
 
-func _make_player_material() -> StandardMaterial3D:
+func _make_player_material(character_id: String = DEFAULT_CHARACTER_ID) -> StandardMaterial3D:
 	var material := _make_material(Color.WHITE)
-	material.albedo_texture = PLAYER_TEXTURE
+	material.albedo_texture = _character_texture(character_id)
 	material.texture_repeat = false
 	material.uv1_scale = PLAYER_TEXTURE_UV_SCALE
 	material.uv1_offset = PLAYER_TEXTURE_UV_OFFSET
+	return material
+
+
+func _make_locked_character_material() -> StandardMaterial3D:
+	var material := _make_material(Color.BLACK)
+	material.roughness = 0.85
 	return material
 
 
@@ -762,6 +1185,13 @@ func _update_player(delta: float) -> void:
 		var spin_rate := lerpf(TUNING.player_spin_start_rate, TUNING.player_spin_max_rate, speed_ratio)
 		_player_roll_angle = fposmod(_player_roll_angle + spin_rate * delta, TAU)
 	_player.basis = Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, _player_roll_angle)
+
+
+func _update_character_previews(delta: float) -> void:
+	if not _character_selection_open():
+		return
+	for pivot in _character_preview_pivots:
+		pivot.rotate_y(CHARACTER_PREVIEW_SPIN_SPEED * delta)
 
 
 func _sync_obstacles() -> void:
@@ -907,8 +1337,11 @@ func _update_hud() -> void:
 	_start_title_label.visible = false
 	if _settings_button != null:
 		_settings_button.visible = simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER
+	if _character_button != null:
+		_character_button.visible = simulation.state == Simulation.RunState.READY or simulation.state == Simulation.RunState.GAME_OVER
 	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
 		_close_settings()
+		_close_character_selection()
 
 	match simulation.state:
 		Simulation.RunState.READY:
@@ -943,19 +1376,35 @@ func _save_progress() -> void:
 	config.set_value("progress", "tutorial_completed", _tutorial_completed)
 	config.set_value("settings", "sound_enabled", _sound_enabled)
 	config.set_value("settings", "sound_volume", _sound_volume)
+	config.set_value("characters", "selected_character", _selected_character_id)
+	for character_id in _known_character_ids():
+		if character_id == DEFAULT_CHARACTER_ID:
+			continue
+		config.set_value("characters", "%s_unlocked" % character_id, _is_character_unlocked(character_id))
 	config.save(_save_path)
 
 
 func _load_progress() -> void:
 	var config := ConfigFile.new()
+	_unlocked_character_ids = {DEFAULT_CHARACTER_ID: true}
 	if config.load(_save_path) == OK:
 		high_score = int(config.get_value("scores", "high_score", 0))
 		_total_coins = int(config.get_value("currency", "coins", 0))
 		_tutorial_completed = bool(config.get_value("progress", "tutorial_completed", false))
 		_sound_enabled = bool(config.get_value("settings", "sound_enabled", DEFAULT_SOUND_ENABLED))
 		_sound_volume = clampf(float(config.get_value("settings", "sound_volume", DEFAULT_SOUND_VOLUME)), 0.0, 1.0)
+		for character_id in _known_character_ids():
+			if character_id == DEFAULT_CHARACTER_ID:
+				continue
+			if bool(config.get_value("characters", "%s_unlocked" % character_id, false)):
+				_unlocked_character_ids[character_id] = true
+		_selected_character_id = String(config.get_value("characters", "selected_character", DEFAULT_CHARACTER_ID))
+		if not _is_known_character(_selected_character_id) or not _is_character_unlocked(_selected_character_id):
+			_selected_character_id = DEFAULT_CHARACTER_ID
+	_apply_selected_character_material()
 	_apply_sound_settings()
 	_sync_settings_controls()
+	_sync_character_controls()
 
 
 func _play_restart_fade() -> void:

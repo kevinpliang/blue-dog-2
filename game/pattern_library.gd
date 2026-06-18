@@ -82,6 +82,20 @@ static func all_patterns() -> Array[Dictionary]:
 			_row(0.0, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
 			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(1, WALL)]),
 		]),
+		_pattern("left_choice_then_jump_gate", 1, [
+			_row(0.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+		], [
+			_coin(1.2, 0, COIN_GROUND_HEIGHT),
+			_coin(MIN_CONSECUTIVE_WALL_ROW_SPACING, 0, COIN_JUMP_HEIGHT),
+		]),
+		_pattern("right_choice_then_duck_gate", 1, [
+			_row(0.0, [_obstacle(0, WALL), _obstacle(1, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
+		], [
+			_coin(1.2, 2, COIN_GROUND_HEIGHT),
+			_coin(MIN_CONSECUTIVE_WALL_ROW_SPACING, 2, COIN_GROUND_HEIGHT),
+		]),
 		_pattern("left_center_right", 2, [
 			_row(0.0, [_obstacle(1, WALL), _obstacle(2, WALL)]),
 			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(2, WALL)]),
@@ -106,6 +120,42 @@ static func all_patterns() -> Array[Dictionary]:
 			_row(0.0, [_obstacle(0, GROUND), _obstacle(2, WALL)]),
 			_row(6.0, [_obstacle(1, OVERHEAD)]),
 			_row(12.0, [_obstacle(0, WALL), _obstacle(2, GROUND)]),
+		]),
+		_pattern("center_slalom_jump_gate", 2, [
+			_row(0.0, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(1, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+		], [
+			_coin(1.2, 1, COIN_GROUND_HEIGHT),
+			_coin(MIN_CONSECUTIVE_WALL_ROW_SPACING, 0, COIN_GROUND_HEIGHT),
+			_coin(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, 0, COIN_JUMP_HEIGHT),
+		]),
+		_pattern("center_slalom_duck_gate", 2, [
+			_row(0.0, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, WALL), _obstacle(1, WALL)]),
+			_row(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
+		], [
+			_coin(1.2, 1, COIN_GROUND_HEIGHT),
+			_coin(MIN_CONSECUTIVE_WALL_ROW_SPACING, 2, COIN_GROUND_HEIGHT),
+			_coin(MIN_CONSECUTIVE_WALL_ROW_SPACING * 2.0, 2, COIN_GROUND_HEIGHT),
+		]),
+		_pattern("jump_gate_lane_duck_gate", 2, [
+			_row(0.0, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+			_row(12.0, [_obstacle(0, WALL), _obstacle(2, WALL)]),
+			_row(MIN_JUMP_TO_DUCK_SPACING, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
+		], [
+			_coin(0.0, 1, COIN_JUMP_HEIGHT),
+			_coin(12.0, 1, COIN_GROUND_HEIGHT),
+			_coin(MIN_JUMP_TO_DUCK_SPACING, 1, COIN_GROUND_HEIGHT),
+		]),
+		_pattern("duck_gate_lane_jump_gate", 2, [
+			_row(0.0, [_obstacle(0, OVERHEAD), _obstacle(1, OVERHEAD), _obstacle(2, OVERHEAD)]),
+			_row(MIN_DUCK_TO_JUMP_SPACING, [_obstacle(1, WALL), _obstacle(2, WALL)]),
+			_row(MIN_DUCK_TO_JUMP_SPACING + MIN_CONSECUTIVE_WALL_ROW_SPACING, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),
+		], [
+			_coin(0.0, 1, COIN_GROUND_HEIGHT),
+			_coin(MIN_DUCK_TO_JUMP_SPACING, 0, COIN_GROUND_HEIGHT),
+			_coin(MIN_DUCK_TO_JUMP_SPACING + MIN_CONSECUTIVE_WALL_ROW_SPACING, 0, COIN_JUMP_HEIGHT),
 		]),
 		_pattern("jump_then_duck_gate", 2, [
 			_row(0.0, [_obstacle(0, GROUND), _obstacle(1, GROUND), _obstacle(2, GROUND)]),

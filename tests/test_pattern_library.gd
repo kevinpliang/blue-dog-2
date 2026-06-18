@@ -9,10 +9,16 @@ const NEW_PATTERN_TIERS := {
 	"duck_wall_jump_gate": 1,
 	"jump_gate_then_left": 1,
 	"duck_gate_then_right": 1,
+	"left_choice_then_jump_gate": 1,
+	"right_choice_then_duck_gate": 1,
 	"jump_then_duck_gate": 2,
 	"duck_then_jump_gate": 2,
 	"weave_left_center_jump": 2,
 	"weave_right_center_duck": 2,
+	"center_slalom_jump_gate": 2,
+	"center_slalom_duck_gate": 2,
+	"jump_gate_lane_duck_gate": 2,
+	"duck_gate_lane_jump_gate": 2,
 }
 
 var failures: Array[String] = []
@@ -131,6 +137,16 @@ func test_balanced_expansion_patterns() -> void:
 		expect_true(
 			float(patterns_by_id["duck_then_jump_gate"]["rows"][1]["offset"]) >= 9.0,
 			"duck then jump allows duck recovery"
+		)
+	if patterns_by_id.has("jump_gate_lane_duck_gate"):
+		expect_true(
+			float(patterns_by_id["jump_gate_lane_duck_gate"]["rows"][2]["offset"]) >= 20.0,
+			"jump gate lane duck gate never requires airborne ducking"
+		)
+	if patterns_by_id.has("duck_gate_lane_jump_gate"):
+		expect_true(
+			float(patterns_by_id["duck_gate_lane_jump_gate"]["rows"][2]["offset"]) >= 9.0,
+			"duck gate lane jump gate allows duck recovery"
 		)
 
 
