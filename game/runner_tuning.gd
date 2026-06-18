@@ -13,7 +13,7 @@ extends Resource
 @export var normal_pattern_spacing_speed_factor := 0.25
 @export var minimum_pattern_spacing := 16.0
 @export var tier_one_unlock_distance := 250.0
-@export var tier_two_unlock_distance := 650.0
+@export var tier_two_unlock_distance := 750.0
 @export var lane_change_speed := 32.0
 @export var jump_velocity := 15
 @export var gravity := 50.0

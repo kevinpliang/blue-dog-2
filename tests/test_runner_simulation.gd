@@ -153,18 +153,18 @@ func test_duck_has_a_cooldown() -> void:
 	simulation.next_spawn_z = -10000.0
 
 	simulation.duck()
-	simulation.step(simulation.DUCK_DURATION + 0.01)
+	simulation.step(simulation.TUNING.duck_duration + 0.01)
 	simulation.duck()
 	expect_equal(simulation.duck_time, 0.0, "duck cannot restart during cooldown")
 
-	simulation.step(simulation.DUCK_COOLDOWN + 0.01)
+	simulation.step(simulation.TUNING.duck_cooldown + 0.01)
 	simulation.duck()
 	expect_true(simulation.duck_time > 0.0, "duck can restart after cooldown")
 
 
 func test_duck_timing_remains_intentional() -> void:
-	expect_equal(Simulation.DUCK_DURATION, 0.3, "duck duration remains intentional")
-	expect_equal(Simulation.DUCK_COOLDOWN, 0.05, "duck cooldown remains intentional")
+	expect_equal(Simulation.TUNING.duck_duration, 0.4, "duck duration remains intentional")
+	expect_equal(Simulation.TUNING.duck_cooldown, 0.05, "duck cooldown remains intentional")
 
 
 func test_early_jump_runs_on_landing() -> void:
@@ -183,9 +183,9 @@ func test_early_duck_runs_after_cooldown() -> void:
 	simulation.start(33)
 	clear_obstacles(simulation)
 	simulation.duck()
-	simulation.step(Simulation.DUCK_DURATION)
+	simulation.step(simulation.TUNING.duck_duration)
 	simulation.duck()
-	simulation.step(Simulation.DUCK_COOLDOWN + 0.01)
+	simulation.step(simulation.TUNING.duck_cooldown + 0.01)
 	expect_true(simulation.duck_time > 0.0, "buffered duck runs after cooldown")
 
 
@@ -198,7 +198,7 @@ func test_speed_caps_and_score_tracks_distance() -> void:
 	for index in range(60):
 		simulation.step(1.0)
 
-	expect_equal(simulation.speed, simulation.MAX_SPEED, "speed stops at its cap")
+	expect_equal(simulation.speed, simulation.TUNING.max_speed, "speed stops at its cap")
 	expect_equal(simulation.score(), int(floor(simulation.distance)), "score is whole meters")
 
 

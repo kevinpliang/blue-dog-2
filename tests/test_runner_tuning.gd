@@ -6,16 +6,16 @@ var failures: Array[String] = []
 
 
 func run_all() -> Array[String]:
-	expect_equal(TUNING.duck_duration, 0.3, "tuning preserves duck duration")
+	expect_equal(TUNING.duck_duration, 0.4, "tuning preserves duck duration")
 	expect_equal(TUNING.duck_cooldown, 0.05, "tuning preserves duck cooldown")
-	expect_property_equal(TUNING, "air_duck_dive_duration", 0.12, "airborne duck dive stays brief")
+	expect_property_equal(TUNING, "air_duck_dive_duration", 0.1, "airborne duck dive stays brief")
 	expect_equal(TUNING.start_speed, 12.0, "tuning preserves start speed")
-	expect_equal(TUNING.max_speed, 24.0, "tuning preserves max speed")
+	expect_equal(TUNING.max_speed, 28.0, "tuning preserves max speed")
 	expect_property_positive(TUNING, "early_pattern_spacing", "early pattern spacing is tunable")
 	expect_property_positive(TUNING, "early_spacing_end_distance", "early spacing end distance is tunable")
 	expect_property_positive(TUNING, "normal_pattern_spacing_base", "normal pattern spacing base is tunable")
 	expect_property_equal(TUNING, "normal_pattern_spacing_speed_factor", 0.25, "normal spacing preserves speed scaling")
-	expect_property_equal(TUNING, "minimum_pattern_spacing", 9.0, "pattern spacing preserves its minimum")
+	expect_property_equal(TUNING, "minimum_pattern_spacing", 16.0, "pattern spacing preserves its minimum")
 	expect_property_positive(TUNING, "tier_one_unlock_distance", "tier one unlock distance is tunable")
 	expect_property_positive(TUNING, "tier_two_unlock_distance", "tier two unlock distance is tunable")
 	expect_true(TUNING.tier_two_unlock_distance > TUNING.tier_one_unlock_distance, "tier two unlocks after tier one")

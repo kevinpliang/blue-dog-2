@@ -10,6 +10,10 @@ const DISTANCE_FADE_SHADER = preload("res://game/shaders/distance_fade.gdshader"
 const OBSTACLE_DISTANCE_FADE_SHADER = preload("res://game/shaders/obstacle_distance_fade.gdshader")
 const PLAYER_TEXTURE = preload("res://assets/player/white.png")
 const BEAR_TEXTURE = preload("res://assets/player/bear.png")
+const CAT_TEXTURE = preload("res://assets/player/cat.png")
+const ZEBRA_TEXTURE = preload("res://assets/player/zebra.png")
+const HUMAN_TEXTURE = preload("res://assets/player/human.png")
+const GAMEPLAY_MUSIC_PATH := "res://assets/music/mondamusic-retro-arcade-game-music-512837.mp3"
 const HUD_FONT: FontFile = preload("res://assets/fonts/Michroma-Regular.ttf")
 const SETTINGS_ICON: Texture2D = preload("res://assets/icons/settings.svg")
 const PETS_ICON: Texture2D = preload("res://assets/icons/pets.svg")
@@ -23,15 +27,23 @@ const COIN_RADIUS := 0.42
 const COIN_THICKNESS := 0.12
 const COIN_ROTATION_SPEED := 2.4
 const OBSTACLE_OPACITY := 0.4
-const PLAYER_TEXTURE_UV_SCALE := Vector3(4.0, 1.0, 1.0)
-const PLAYER_TEXTURE_UV_OFFSET := Vector3(-1.5, 0.0, 0.0)
+const PLAYER_TEXTURE_UV_SCALE := Vector3.ONE
+const PLAYER_TEXTURE_UV_OFFSET := Vector3.ZERO
 const TRACK_LENGTH := 250.0
 const TRACK_CENTER_Z := -90.0
 const DEFAULT_SOUND_ENABLED := true
+const DEFAULT_MUSIC_ENABLED := true
 const DEFAULT_SOUND_VOLUME := 1.0
+const MUSIC_BASE_VOLUME_DB := -12.0
 const DEFAULT_CHARACTER_ID := "dog"
 const BEAR_CHARACTER_ID := "bear"
-const BEAR_CHARACTER_COST := 500
+const CAT_CHARACTER_ID := "cat"
+const ZEBRA_CHARACTER_ID := "zebra"
+const HUMAN_CHARACTER_ID := "human"
+const BEAR_CHARACTER_COST := 250
+const CAT_CHARACTER_COST := 500
+const ZEBRA_CHARACTER_COST := 1000
+const HUMAN_CHARACTER_COST := 2000
 const HUD_EDGE_MARGIN := 0.0
 const HUD_TEXT_TOP_ADJUSTMENT := -14.0
 const COIN_LABEL_TOP_OFFSET := 20.0
@@ -56,6 +68,7 @@ const CHARACTER_CARD_SELECTED_HEIGHT := 18.0
 const CHARACTER_CARD_BOTTOM_MARGIN := 6.0
 const CHARACTER_CARD_TITLE_FONT_SIZE := 18
 const CHARACTER_CARD_SELECTED_FONT_SIZE := 13
+const LOCKED_CHARACTER_COST_COLOR := Color(1.0, 0.08, 0.08)
 const SETTINGS_PANEL_INNER_HEIGHT := 400.0
 const CHARACTER_PANEL_INNER_HEIGHT := 510.0
 
@@ -67,6 +80,7 @@ var _total_coins := 0
 var _save_path := SAVE_PATH
 var _tutorial_completed := false
 var _sound_enabled := DEFAULT_SOUND_ENABLED
+var _music_enabled := DEFAULT_MUSIC_ENABLED
 var _sound_volume := DEFAULT_SOUND_VOLUME
 var _selected_character_id := DEFAULT_CHARACTER_ID
 var _unlocked_character_ids := {DEFAULT_CHARACTER_ID: true}
@@ -83,6 +97,7 @@ var _player: MeshInstance3D
 var _player_light: OmniLight3D
 var _camera: Camera3D
 var _feedback: FeedbackController
+var _music_player: AudioStreamPlayer
 var _hud_font: FontFile
 var _score_stack: VBoxContainer
 var _score_label: Label
@@ -97,6 +112,7 @@ var _settings_button: Button
 var _settings_modal_blocker: ColorRect
 var _settings_panel: PanelContainer
 var _sound_toggle_button: Button
+var _music_toggle_button: Button
 var _volume_slider: HSlider
 var _volume_value_label: Label
 var _settings_close_button: Button
@@ -125,9 +141,16 @@ func _ready() -> void:
 	_feedback.name = "FeedbackController"
 	add_child(_feedback)
 	_feedback.setup(_camera)
+	_build_audio()
 	_build_hud()
 	_load_progress()
 	_update_hud()
+
+
+func _exit_tree() -> void:
+	if _music_player != null:
+		_music_player.stop()
+		_music_player.stream = null
 
 
 func _process(delta: float) -> void:
@@ -189,6 +212,7 @@ func set_app_paused(value: bool) -> void:
 	_app_paused = value
 	if _feedback != null:
 		_feedback.set_feedback_paused(value)
+	_update_music_playback()
 
 
 func advance_simulation(delta: float) -> void:
@@ -297,6 +321,10 @@ func _toggle_sound() -> void:
 	_set_sound_enabled(not _sound_enabled)
 
 
+func _toggle_music() -> void:
+	_set_music_enabled(not _music_enabled)
+
+
 func _set_sound_enabled(value: bool) -> void:
 	_sound_enabled = value
 	_apply_sound_settings()
@@ -304,9 +332,17 @@ func _set_sound_enabled(value: bool) -> void:
 	_save_progress()
 
 
+func _set_music_enabled(value: bool) -> void:
+	_music_enabled = value
+	_apply_music_settings()
+	_sync_settings_controls()
+	_save_progress()
+
+
 func _set_sound_volume(value: float) -> void:
 	_sound_volume = clampf(value, 0.0, 1.0)
 	_apply_sound_settings()
+	_apply_music_settings()
 	_sync_settings_controls()
 	_save_progress()
 
@@ -316,9 +352,46 @@ func _apply_sound_settings() -> void:
 		_feedback.set_sound_settings(_sound_enabled, _sound_volume)
 
 
+func _apply_music_settings() -> void:
+	if _music_player == null:
+		return
+	_music_player.volume_db = _effective_music_volume_db()
+	_update_music_playback()
+
+
+func _update_music_playback() -> void:
+	if _music_player == null:
+		return
+	var should_play := _music_should_play()
+	if should_play and DisplayServer.get_name() == "headless":
+		return
+	if should_play:
+		if not _music_player.playing:
+			_music_player.play()
+	else:
+		_music_player.stop()
+
+
+func _music_should_play() -> bool:
+	return (
+		_music_enabled
+		and _sound_volume > 0.0
+		and not _app_paused
+		and simulation.state == Simulation.RunState.RUNNING
+	)
+
+
+func _effective_music_volume_db() -> float:
+	if _sound_volume <= 0.0:
+		return -80.0
+	return MUSIC_BASE_VOLUME_DB + linear_to_db(_sound_volume)
+
+
 func _sync_settings_controls() -> void:
 	if _sound_toggle_button != null:
 		_sound_toggle_button.text = "SOUND: ON" if _sound_enabled else "SOUND: OFF"
+	if _music_toggle_button != null:
+		_music_toggle_button.text = "MUSIC: ON" if _music_enabled else "MUSIC: OFF"
 	if _volume_slider != null and not is_equal_approx(_volume_slider.value, _sound_volume):
 		_volume_slider.set_value_no_signal(_sound_volume)
 	if _volume_value_label != null:
@@ -326,7 +399,13 @@ func _sync_settings_controls() -> void:
 
 
 func _known_character_ids() -> Array[String]:
-	return [DEFAULT_CHARACTER_ID, BEAR_CHARACTER_ID]
+	return [
+		DEFAULT_CHARACTER_ID,
+		BEAR_CHARACTER_ID,
+		CAT_CHARACTER_ID,
+		ZEBRA_CHARACTER_ID,
+		HUMAN_CHARACTER_ID,
+	]
 
 
 func _is_known_character(character_id: String) -> bool:
@@ -341,6 +420,12 @@ func _character_cost(character_id: String) -> int:
 	match character_id:
 		BEAR_CHARACTER_ID:
 			return BEAR_CHARACTER_COST
+		CAT_CHARACTER_ID:
+			return CAT_CHARACTER_COST
+		ZEBRA_CHARACTER_ID:
+			return ZEBRA_CHARACTER_COST
+		HUMAN_CHARACTER_ID:
+			return HUMAN_CHARACTER_COST
 		_:
 			return 0
 
@@ -349,6 +434,12 @@ func _character_title(character_id: String) -> String:
 	match character_id:
 		BEAR_CHARACTER_ID:
 			return "BEAR"
+		CAT_CHARACTER_ID:
+			return "CAT"
+		ZEBRA_CHARACTER_ID:
+			return "ZEBRA"
+		HUMAN_CHARACTER_ID:
+			return "HUMAN"
 		_:
 			return "DOG"
 
@@ -357,8 +448,18 @@ func _character_texture(character_id: String) -> Texture2D:
 	match character_id:
 		BEAR_CHARACTER_ID:
 			return BEAR_TEXTURE
+		CAT_CHARACTER_ID:
+			return CAT_TEXTURE
+		ZEBRA_CHARACTER_ID:
+			return ZEBRA_TEXTURE
+		HUMAN_CHARACTER_ID:
+			return HUMAN_TEXTURE
 		_:
 			return PLAYER_TEXTURE
+
+
+func _debug_character_purchases_are_free() -> bool:
+	return OS.is_debug_build() or OS.has_feature("debug")
 
 
 func _apply_selected_character_material() -> void:
@@ -371,10 +472,12 @@ func _select_character(character_id: String) -> void:
 		return
 	if not _is_character_unlocked(character_id):
 		var cost := _character_cost(character_id)
-		if _total_coins < cost:
+		var free_debug_purchase := _debug_character_purchases_are_free()
+		if not free_debug_purchase and _total_coins < cost:
 			_sync_character_controls()
 			return
-		_total_coins -= cost
+		if not free_debug_purchase:
+			_total_coins -= cost
 		_unlocked_character_ids[character_id] = true
 	if not _is_character_unlocked(character_id):
 		return
@@ -480,6 +583,17 @@ func _build_world() -> void:
 	_player_light.shadow_enabled = false
 	_player_light.position = Vector3(0.0, 1.2, TUNING.visual_action_plane_z)
 	add_child(_player_light)
+
+
+func _build_audio() -> void:
+	_music_player = AudioStreamPlayer.new()
+	_music_player.name = "GameplayMusicPlayer"
+	var music_stream := AudioStreamMP3.load_from_file(GAMEPLAY_MUSIC_PATH)
+	if music_stream != null:
+		music_stream.loop = true
+	_music_player.stream = music_stream
+	_music_player.volume_db = _effective_music_volume_db()
+	add_child(_music_player)
 
 
 func _build_hud() -> void:
@@ -605,6 +719,7 @@ func _build_hud() -> void:
 	_add_summary_row(summary_grid, "peak_multiplier", "PEAK MULTIPLIER")
 	_add_summary_row(summary_grid, "score", "SCORE")
 	_add_summary_row(summary_grid, "high_score", "HIGH SCORE")
+	_add_summary_row(summary_grid, "coins_earned", "COINS EARNED")
 
 	var restart_label := Label.new()
 	restart_label.name = "RestartLabel"
@@ -733,6 +848,17 @@ func _build_settings_ui(root: Control) -> void:
 	_sound_toggle_button.pressed.connect(_toggle_sound)
 	stack.add_child(_sound_toggle_button)
 
+	_music_toggle_button = Button.new()
+	_music_toggle_button.name = "MusicToggleButton"
+	_music_toggle_button.focus_mode = Control.FOCUS_NONE
+	_music_toggle_button.add_theme_font_override("font", _hud_font)
+	_music_toggle_button.add_theme_font_size_override("font_size", 28)
+	_music_toggle_button.add_theme_color_override("font_color", Color.WHITE)
+	_music_toggle_button.add_theme_stylebox_override("normal", _make_ui_box_style(Color(0.0, 0.08, 0.12, 0.75), Color(0.0, 0.85, 1.0), 16))
+	_music_toggle_button.add_theme_stylebox_override("pressed", _make_ui_box_style(Color(0.0, 0.3, 0.35, 0.9), Color.WHITE, 16))
+	_music_toggle_button.pressed.connect(_toggle_music)
+	stack.add_child(_music_toggle_button)
+
 	var volume_row := HBoxContainer.new()
 	volume_row.add_theme_constant_override("separation", 18)
 	stack.add_child(volume_row)
@@ -836,14 +962,14 @@ func _build_character_selection_ui(root: Control) -> void:
 
 	var grid := GridContainer.new()
 	grid.name = "CharacterGrid"
-	grid.columns = 2
+	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 22)
 	grid.add_theme_constant_override("v_separation", 22)
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	stack.add_child(grid)
 
-	_add_character_card(grid, DEFAULT_CHARACTER_ID)
-	_add_character_card(grid, BEAR_CHARACTER_ID)
+	for character_id in _known_character_ids():
+		_add_character_card(grid, character_id)
 
 	var spacer := Control.new()
 	spacer.name = "CharacterPanelSpacer"
@@ -996,7 +1122,7 @@ func _build_character_preview(character_id: String, locked := false) -> SubViewp
 	sphere.radial_segments = 20
 	sphere.rings = 12
 	sphere_instance.mesh = sphere
-	sphere_instance.material_override = _make_locked_character_material() if locked else _make_player_material(character_id)
+	sphere_instance.material_override = _make_locked_character_material(character_id) if locked else _make_player_material(character_id)
 	sphere_instance.basis = Basis(Vector3.UP, PI)
 	pivot.add_child(sphere_instance)
 
@@ -1022,6 +1148,7 @@ func _build_locked_character_preview(character_id: String, cost: int) -> PanelCo
 	cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_style_label(cost_label, 24)
+	cost_label.add_theme_color_override("font_color", LOCKED_CHARACTER_COST_COLOR)
 	locked.add_child(cost_label)
 	_character_cost_labels[character_id] = cost_label
 	return locked
@@ -1097,8 +1224,12 @@ func _make_player_material(character_id: String = DEFAULT_CHARACTER_ID) -> Stand
 	return material
 
 
-func _make_locked_character_material() -> StandardMaterial3D:
-	var material := _make_material(Color.BLACK)
+func _make_locked_character_material(character_id: String) -> StandardMaterial3D:
+	var material := _make_material(Color(0.22, 0.24, 0.26))
+	material.albedo_texture = _character_texture(character_id)
+	material.texture_repeat = false
+	material.uv1_scale = PLAYER_TEXTURE_UV_SCALE
+	material.uv1_offset = PLAYER_TEXTURE_UV_OFFSET
 	material.roughness = 0.85
 	return material
 
@@ -1342,6 +1473,7 @@ func _update_hud() -> void:
 	if simulation.state != Simulation.RunState.READY and simulation.state != Simulation.RunState.GAME_OVER:
 		_close_settings()
 		_close_character_selection()
+	_update_music_playback()
 
 	match simulation.state:
 		Simulation.RunState.READY:
@@ -1355,6 +1487,7 @@ func _update_hud() -> void:
 			_run_summary_values["peak_multiplier"].text = "x%d" % simulation.peak_multiplier
 			_run_summary_values["score"].text = str(simulation.final_score())
 			_run_summary_values["high_score"].text = str(high_score)
+			_run_summary_values["coins_earned"].text = "$%d" % simulation.run_coin_count
 			_run_summary.visible = true
 		_:
 			_overlay_label.visible = false
@@ -1375,6 +1508,7 @@ func _save_progress() -> void:
 	config.set_value("currency", "coins", _total_coins)
 	config.set_value("progress", "tutorial_completed", _tutorial_completed)
 	config.set_value("settings", "sound_enabled", _sound_enabled)
+	config.set_value("settings", "music_enabled", _music_enabled)
 	config.set_value("settings", "sound_volume", _sound_volume)
 	config.set_value("characters", "selected_character", _selected_character_id)
 	for character_id in _known_character_ids():
@@ -1392,6 +1526,7 @@ func _load_progress() -> void:
 		_total_coins = int(config.get_value("currency", "coins", 0))
 		_tutorial_completed = bool(config.get_value("progress", "tutorial_completed", false))
 		_sound_enabled = bool(config.get_value("settings", "sound_enabled", DEFAULT_SOUND_ENABLED))
+		_music_enabled = bool(config.get_value("settings", "music_enabled", DEFAULT_MUSIC_ENABLED))
 		_sound_volume = clampf(float(config.get_value("settings", "sound_volume", DEFAULT_SOUND_VOLUME)), 0.0, 1.0)
 		for character_id in _known_character_ids():
 			if character_id == DEFAULT_CHARACTER_ID:
@@ -1403,6 +1538,7 @@ func _load_progress() -> void:
 			_selected_character_id = DEFAULT_CHARACTER_ID
 	_apply_selected_character_material()
 	_apply_sound_settings()
+	_apply_music_settings()
 	_sync_settings_controls()
 	_sync_character_controls()
 

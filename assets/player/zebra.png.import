@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://horgjbm1eka6"
-path="res://.godot/imported/white.png-724330be48bc1671b95712069ea9ef8b.ctex"
+uid="uid://y2as0kk6qu5n"
+path="res://.godot/imported/zebra.png-1995547548a0cf6885e9a25a1e6a3cae.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/player/white.png"
-dest_files=["res://.godot/imported/white.png-724330be48bc1671b95712069ea9ef8b.ctex"]
+source_file="res://assets/player/zebra.png"
+dest_files=["res://.godot/imported/zebra.png-1995547548a0cf6885e9a25a1e6a3cae.ctex"]
 
 [params]
 
